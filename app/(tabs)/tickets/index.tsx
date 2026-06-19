@@ -105,8 +105,8 @@ export default function TicketListScreen() {
     (slaAtRisk === "true" ? 1 : 0) +
     (assigneeId ? 1 : 0);
 
-  const { data: statsData } = useTicketStats();
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch } =
+  const { data: statsData, refetch: refetchStats } = useTicketStats();
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch: refetchList } =
     useInfiniteTickets({
       status: activeStatus,
       q: debouncedSearch || undefined,
@@ -115,6 +115,11 @@ export default function TicketListScreen() {
       slaAtRisk: slaAtRisk === "true" ? true : undefined,
       assigneeId: assigneeId || undefined,
     });
+
+  function handleRefresh() {
+    refetchStats();
+    refetchList();
+  }
 
   const tickets = data?.pages.flatMap((p) => p.content) ?? [];
   const totalElements = data?.pages[0]?.totalElements ?? 0;
@@ -276,7 +281,7 @@ export default function TicketListScreen() {
         data={tickets}
         keyExtractor={(t) => t.id}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#7C3AED" />
+          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor="#7C3AED" />
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.3}

@@ -21,7 +21,9 @@ export function useTicketStats() {
   return useQuery({
     queryKey: ticketKeys.stats(),
     queryFn: getTicketStats,
-    staleTime: 60_000,
+    staleTime: 0,           // always consider stale so it refetches on every mount/focus
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
