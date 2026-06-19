@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import axios from "axios";
 import { AuthUser } from "@/types/auth";
-import { clearTokens, getAccessToken, hydrateUser } from "@/api/auth.api";
+import { clearTokens, getRefreshToken, hydrateUser, saveUser } from "@/api/auth.api";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:8080";
 
@@ -19,7 +19,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   hydrated: false,
 
-  setUser: (user) => set({ user, isAuthenticated: true }),
+  setUser: (user) => {
+    saveUser(user); // persist to SecureStore for hydration on next app launch
+    set({ user, isAuthenticated: true });
+  },
 
   hydrate: async () => {
     const user = await hydrateUser();
@@ -28,11 +31,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      const token = await getAccessToken();
-      if (token) {
-        axios.post(`${BASE_URL}/api/v1/auth/logout`, {}, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+      const refreshToken = await getRefreshToken();
+      if (refreshToken) {
+        // Backend requires { refreshToken } in body — not a Bearer header
+        axios.post(`${BASE_URL}/api/v1/auth/logout`, { refreshToken });
       }
     } catch {}
     await clearTokens();

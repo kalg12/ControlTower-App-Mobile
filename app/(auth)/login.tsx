@@ -26,7 +26,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const res = await login({ email: email.trim().toLowerCase(), password });
-      await saveTokens(res.tokens);
+      await saveTokens(res.accessToken, res.refreshToken);
       setUser(res.user);
       router.replace("/(tabs)");
     } catch (err: any) {
