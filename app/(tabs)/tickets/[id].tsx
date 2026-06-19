@@ -4,7 +4,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -12,12 +11,12 @@ import {
   ActionSheetIOS,
   StatusBar,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import {
   useTicket,
@@ -72,13 +71,18 @@ export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [reply, setReply] = useState("");
   const [tab, setTab] = useState<"conversation" | "details">("conversation");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const flatRef = useRef<FlatList>(null);
 
-  const { data: ticket, isLoading: loadingTicket } = useTicket(id);
-  const { data: comments, isLoading: loadingComments } = useTicketComments(id);
+  const { data: ticket, isLoading: loadingTicket, refetch: refetchTicket, isRefetching: refetchingTicket } = useTicket(id);
+  const { data: comments, isLoading: loadingComments, refetch: refetchComments, isRefetching: refetchingComments } = useTicketComments(id);
   const addComment = useAddComment(id);
   const updateStatus = useUpdateTicketStatus(id);
+
+  const isRefreshing = refetchingTicket || refetchingComments;
+  function handleRefresh() {
+    refetchTicket();
+    refetchComments();
+  }
 
   const { data: client } = useQuery({
     queryKey: ["client", ticket?.clientId],
@@ -95,34 +99,6 @@ export default function TicketDetailScreen() {
     enabled: !!ticket?.clientId,
     staleTime: 300_000,
   });
-
-  const handleCopy = useCallback(async (comment: TicketComment) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await Clipboard.setStringAsync(comment.content);
-    setCopiedId(comment.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  }, []);
-
-  function handleLongPress(comment: TicketComment) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Copiar mensaje", "Cancelar"],
-          cancelButtonIndex: 1,
-          title: comment.authorName ?? undefined,
-        },
-        (idx) => {
-          if (idx === 0) handleCopy(comment);
-        }
-      );
-    } else {
-      Alert.alert(comment.authorName ?? "Mensaje", undefined, [
-        { text: "Copiar", onPress: () => handleCopy(comment) },
-        { text: "Cancelar", style: "cancel" },
-      ]);
-    }
-  }
 
   function handleSend() {
     if (!reply.trim()) return;
@@ -325,15 +301,15 @@ export default function TicketDetailScreen() {
               ref={flatRef}
               data={comments ?? []}
               keyExtractor={(c) => c.id}
-              renderItem={({ item }) => (
-                <MessageBubble
-                  comment={item}
-                  copied={copiedId === item.id}
-                  onLongPress={() => handleLongPress(item)}
-                  onCopy={() => handleCopy(item)}
-                />
-              )}
+              renderItem={({ item }) => <MessageBubble comment={item} />}
               contentContainerStyle={{ padding: 12, paddingBottom: 8 }}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshing}
+                  onRefresh={handleRefresh}
+                  tintColor="#7C3AED"
+                />
+              }
               ListEmptyComponent={
                 <View className="items-center py-16">
                   <Ionicons name="chatbubble-outline" size={40} color="#2A2A3C" />
@@ -373,7 +349,17 @@ export default function TicketDetailScreen() {
           </View>
         </>
       ) : (
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16, gap: 12 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor="#7C3AED"
+            />
+          }
+        >
           {/* Description */}
           {ticket.description && (
             <DetailSection title="Descripción" icon="document-text-outline">
@@ -475,24 +461,17 @@ export default function TicketDetailScreen() {
 
 /* ─── Sub-components ─── */
 
-function MessageBubble({
-  comment,
-  copied,
-  onLongPress,
-  onCopy,
-}: {
-  comment: TicketComment;
-  copied: boolean;
-  onLongPress: () => void;
-  onCopy: () => void;
-}) {
+function MessageBubble({ comment }: { comment: TicketComment }) {
   const isAgent = comment.senderType === "AGENT";
   const isSystem = comment.senderType === "SYSTEM";
 
   if (isSystem) {
     return (
       <View className="items-center my-2">
-        <Text className="text-xs text-content-muted bg-dark-raised px-3 py-1 rounded-full">
+        <Text
+          className="text-xs text-content-muted bg-dark-raised px-3 py-1 rounded-full"
+          selectable
+        >
           {comment.content}
         </Text>
       </View>
@@ -508,39 +487,26 @@ function MessageBubble({
         </View>
       )}
 
-      <TouchableWithoutFeedback onLongPress={onLongPress} delayLongPress={400}>
-        <View
-          className={`rounded-2xl px-4 py-3 ${
-            isAgent
-              ? "bg-brand rounded-tr-sm"
-              : "bg-dark-raised border border-dark-border rounded-tl-sm"
-          } ${copied ? "opacity-70" : "opacity-100"}`}
+      <View
+        className={`rounded-2xl px-4 py-3 ${
+          isAgent
+            ? "bg-brand rounded-tr-sm"
+            : "bg-dark-raised border border-dark-border rounded-tl-sm"
+        }`}
+      >
+        <Text
+          className={`text-sm leading-5 ${isAgent ? "text-white" : "text-content-primary"}`}
+          selectable
         >
-          <Text
-            className={`text-sm leading-5 ${isAgent ? "text-white" : "text-content-primary"}`}
-            selectable
-          >
-            {comment.content}
-          </Text>
-        </View>
-      </TouchableWithoutFeedback>
+          {comment.content}
+        </Text>
+      </View>
 
-      {/* Footer: time + copy feedback */}
-      <View className={`flex-row items-center gap-2 mt-1 ${isAgent ? "justify-end mr-1" : "ml-1"}`}>
+      <View className={`flex-row items-center gap-1.5 mt-1 ${isAgent ? "justify-end mr-1" : "ml-1"}`}>
         {isAgent && comment.authorName && (
           <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
         )}
         <Text className="text-content-muted text-[10px]">{timeAgo(comment.createdAt)}</Text>
-        {copied ? (
-          <View className="flex-row items-center gap-0.5">
-            <Ionicons name="checkmark-circle" size={10} color="#34D399" />
-            <Text className="text-emerald-400 text-[10px] font-semibold">Copiado</Text>
-          </View>
-        ) : (
-          <TouchableOpacity onPress={onCopy} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-            <Ionicons name="copy-outline" size={11} color="#4A4A5C" />
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
