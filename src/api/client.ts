@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import * as SecureStore from "expo-secure-store";
-import { useAuthStore } from "@/stores/auth.store";
+import { router } from "expo-router";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:8080";
 
@@ -10,7 +10,6 @@ export const apiClient: AxiosInstance = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach JWT to every request
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await SecureStore.getItemAsync("accessToken");
   if (token) {
@@ -19,7 +18,6 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
   return config;
 });
 
-// Unwrap { success, data } envelope and handle 401
 apiClient.interceptors.response.use(
   (response) => {
     if (response.data && "data" in response.data) {
@@ -29,7 +27,6 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     if (error.response?.status === 401) {
-      // Attempt token refresh
       try {
         const refreshToken = await SecureStore.getItemAsync("refreshToken");
         if (refreshToken) {
@@ -40,9 +37,11 @@ apiClient.interceptors.response.use(
           return apiClient.request(error.config);
         }
       } catch {
-        // Refresh failed — logout
-        await useAuthStore.getState().logout();
+        // Refresh failed — clear tokens and redirect to login
       }
+      await SecureStore.deleteItemAsync("accessToken");
+      await SecureStore.deleteItemAsync("refreshToken");
+      router.replace("/(auth)/login");
     }
     return Promise.reject(error);
   }

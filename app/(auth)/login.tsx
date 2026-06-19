@@ -13,6 +13,8 @@ import { router } from "expo-router";
 import { login, saveTokens } from "@/api/auth.api";
 import { useAuthStore } from "@/stores/auth.store";
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:8080";
+
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +30,15 @@ export default function LoginScreen() {
       setUser(res.user);
       router.replace("/(tabs)");
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Credenciales incorrectas";
+      let msg: string;
+      if (!err.response) {
+        // Network error — can't reach the server at all
+        msg = `No se pudo conectar al servidor.\n\n${API_URL}`;
+      } else if (err.response.status === 401 || err.response.status === 403) {
+        msg = err.response.data?.message ?? "Correo o contraseña incorrectos.";
+      } else {
+        msg = err.response.data?.message ?? `Error del servidor (${err.response.status}).`;
+      }
       Alert.alert("Error al iniciar sesión", msg);
     } finally {
       setLoading(false);
@@ -76,6 +86,12 @@ export default function LoginScreen() {
             : <Text className="text-white font-semibold text-base">Iniciar sesión</Text>
           }
         </TouchableOpacity>
+
+        {__DEV__ && (
+          <Text className="text-center text-gray-300 text-xs mt-6" numberOfLines={1}>
+            {API_URL}
+          </Text>
+        )}
       </View>
     </KeyboardAvoidingView>
   );

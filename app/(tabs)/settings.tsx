@@ -1,5 +1,6 @@
 import { View, Text, Switch, TouchableOpacity, Alert, ScrollView } from "react-native";
 import { useState } from "react";
+import { router } from "expo-router";
 import { useAuthStore } from "@/stores/auth.store";
 
 export default function SettingsScreen() {
@@ -13,7 +14,14 @@ export default function SettingsScreen() {
   function confirmLogout() {
     Alert.alert("Cerrar sesión", "¿Estás seguro?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Cerrar sesión", style: "destructive", onPress: logout },
+      {
+        text: "Cerrar sesión",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          router.replace("/(auth)/login");
+        },
+      },
     ]);
   }
 
