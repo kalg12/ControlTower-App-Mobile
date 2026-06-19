@@ -26,7 +26,7 @@ export default function LoginScreen() {
       const res = await login({ email: email.trim().toLowerCase(), password });
       await saveTokens(res.tokens);
       setUser(res.user);
-      router.replace("/(tabs)/");
+      router.replace("/(tabs)");
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Credenciales incorrectas";
       Alert.alert("Error al iniciar sesión", msg);
