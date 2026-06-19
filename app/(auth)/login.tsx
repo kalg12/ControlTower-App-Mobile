@@ -14,7 +14,6 @@ import { router } from "expo-router";
 import { login, saveTokens } from "@/api/auth.api";
 import { useAuthStore } from "@/stores/auth.store";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:8080";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -33,7 +32,7 @@ export default function LoginScreen() {
     } catch (err: any) {
       let msg: string;
       if (!err.response) {
-        msg = `No se pudo conectar al servidor.\n${API_URL}`;
+        msg = "No se pudo conectar al servidor. Verifica tu conexión a internet.";
       } else if (err.response.status === 401 || err.response.status === 403) {
         msg = err.response.data?.message ?? "Correo o contraseña incorrectos.";
       } else {
@@ -103,11 +102,6 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        {__DEV__ && (
-          <Text className="text-center text-content-muted text-xs mt-8" numberOfLines={1}>
-            {API_URL}
-          </Text>
-        )}
       </View>
     </KeyboardAvoidingView>
   );

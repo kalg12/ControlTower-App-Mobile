@@ -14,16 +14,53 @@ import { useAuthStore } from "@/stores/auth.store";
 import { useTicketStats } from "@/queries/tickets.queries";
 import { TicketStatus } from "@/types/ticket";
 
+/* ─── Types ─── */
+
 interface DashboardStats {
   openTickets: number;
   criticalTickets: number;
   resolvedToday: number;
-  avgResolutionHours: number;
+  avgResolutionHours: number | null;
+}
+
+interface BranchHealthSummary {
+  branchId: string;
+  branchName: string;
+  clientName: string;
+  status: "HEALTHY" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
+  latencyMs: number | null;
+  version: string | null;
+  lastCheckedAt: string | null;
+  openIncidents: number;
+  errorMessage: string | null;
+}
+
+/* ─── Helpers ─── */
+
+function formatResolutionTime(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined) return "Sin datos";
+  if (hours === 0) return "Sin datos";
+  if (hours < 1 / 60) return "< 1m";
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }
 
 function goToTickets(status: TicketStatus) {
   router.push({ pathname: "/(tabs)/tickets", params: { initialStatus: status } });
 }
+
+const HEALTH_STATUS: Record<
+  BranchHealthSummary["status"],
+  { label: string; color: string; bg: string; border: string; icon: string }
+> = {
+  HEALTHY:  { label: "Saludable",  color: "#34D399", bg: "bg-emerald-500/10", border: "border-emerald-500/20", icon: "checkmark-circle" },
+  DEGRADED: { label: "Degradado",  color: "#F97316", bg: "bg-orange-500/10",  border: "border-orange-500/20",  icon: "warning" },
+  CRITICAL: { label: "Crítico",    color: "#EF4444", bg: "bg-red-500/10",     border: "border-red-500/20",     icon: "alert-circle" },
+  UNKNOWN:  { label: "Desconocido", color: "#4A4A5C", bg: "bg-dark-raised",   border: "border-dark-border",    icon: "help-circle" },
+};
+
+/* ─── Screen ─── */
 
 export default function DashboardScreen() {
   const user = useAuthStore((s) => s.user);
@@ -38,11 +75,24 @@ export default function DashboardScreen() {
     retry: false,
   });
 
-  const isLoading = statsLoading || dashLoading;
-  const refetch = () => {
+  const { data: healthList, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
+    queryKey: ["health", "clients"],
+    queryFn: async (): Promise<BranchHealthSummary[]> => {
+      const res = await apiClient.get("/api/v1/health/clients");
+      return res.data ?? [];
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const isLoading = statsLoading || dashLoading || healthLoading;
+
+  function handleRefresh() {
     refetchStats();
     refetchDash();
-  };
+    refetchHealth();
+  }
 
   const initials =
     user?.fullName
@@ -51,19 +101,19 @@ export default function DashboardScreen() {
       .map((n) => n[0])
       .join("") ?? "?";
 
-  const totalSlaBreached =
-    (stats?.byStatus.OPEN ?? 0) > 0 || (stats?.byStatus.IN_PROGRESS ?? 0) > 0;
+  const healthCritical = (healthList ?? []).filter((b) => b.status === "CRITICAL").length;
+  const healthDegraded = (healthList ?? []).filter((b) => b.status === "DEGRADED").length;
 
   return (
     <ScrollView
       className="flex-1 bg-dark-bg"
       refreshControl={
-        <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#7C3AED" />
+        <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor="#7C3AED" />
       }
     >
       <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <View className="bg-dark-surface border-b border-dark-border px-5 pt-16 pb-5">
         <View className="flex-row items-center justify-between">
           <View>
@@ -76,20 +126,27 @@ export default function DashboardScreen() {
             <Text className="text-white font-bold text-sm">{initials}</Text>
           </View>
         </View>
+
+        {/* Alert banner: critical branches */}
+        {healthCritical > 0 && (
+          <View className="mt-3 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2 flex-row items-center gap-2">
+            <Ionicons name="alert-circle" size={16} color="#EF4444" />
+            <Text className="text-red-400 text-xs font-semibold flex-1">
+              {healthCritical} sucursal{healthCritical > 1 ? "es" : ""} en estado CRÍTICO
+            </Text>
+          </View>
+        )}
       </View>
 
       <View className="p-4 gap-3">
-        {/* Ticket status grid */}
+
+        {/* ── Ticket status grid ── */}
         {stats && (
           <>
-            <View className="flex-row items-center justify-between px-1 mb-0.5">
-              <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider">
-                Estado de tickets
-              </Text>
-              <TouchableOpacity onPress={() => router.push("/(tabs)/tickets")}>
-                <Text className="text-brand-light text-xs">Ver todos</Text>
-              </TouchableOpacity>
-            </View>
+            <SectionHeader
+              title="Estado de tickets"
+              action={{ label: "Ver todos", onPress: () => router.push("/(tabs)/tickets") }}
+            />
 
             <View className="flex-row gap-3">
               <StatCard
@@ -137,7 +194,6 @@ export default function DashboardScreen() {
               />
             </View>
 
-            {/* Total */}
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/tickets")}
               className="bg-dark-surface border border-dark-border rounded-2xl p-4 flex-row justify-between items-center"
@@ -155,12 +211,10 @@ export default function DashboardScreen() {
           </>
         )}
 
-        {/* Dashboard metrics from /api/v1/dashboard */}
+        {/* ── Dashboard metrics ── */}
         {dash && (
           <>
-            <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider px-1 mt-2 mb-0.5">
-              Métricas del día
-            </Text>
+            <SectionHeader title="Métricas del día" />
             <View className="flex-row gap-3">
               <View className="flex-1 bg-dark-surface border border-dark-border rounded-2xl p-4">
                 <Ionicons name="checkmark-done-outline" size={18} color="#34D399" />
@@ -170,12 +224,13 @@ export default function DashboardScreen() {
               <View className="flex-1 bg-dark-surface border border-dark-border rounded-2xl p-4">
                 <Ionicons name="time-outline" size={18} color="#A78BFA" />
                 <Text className="text-brand-light text-2xl font-bold mt-2">
-                  {dash.avgResolutionHours?.toFixed(1)}h
+                  {formatResolutionTime(dash.avgResolutionHours)}
                 </Text>
                 <Text className="text-content-secondary text-xs mt-0.5">Tiempo promedio</Text>
               </View>
             </View>
-            {dash.criticalTickets > 0 && (
+
+            {(dash.criticalTickets ?? 0) > 0 && (
               <TouchableOpacity
                 onPress={() => goToTickets("OPEN")}
                 className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex-row items-center justify-between"
@@ -194,10 +249,48 @@ export default function DashboardScreen() {
           </>
         )}
 
-        {/* Quick actions */}
-        <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider px-1 mt-2 mb-0.5">
-          Acceso rápido
-        </Text>
+        {/* ── Health monitoring ── */}
+        {(healthList ?? []).length > 0 && (
+          <>
+            <SectionHeader title="Estado de sucursales">
+              {(healthCritical > 0 || healthDegraded > 0) && (
+                <View className="flex-row items-center gap-1.5">
+                  {healthCritical > 0 && (
+                    <View className="bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded-full flex-row items-center gap-1">
+                      <Ionicons name="alert-circle" size={10} color="#EF4444" />
+                      <Text className="text-[10px] text-red-400 font-bold">{healthCritical} críticas</Text>
+                    </View>
+                  )}
+                  {healthDegraded > 0 && (
+                    <View className="bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 rounded-full flex-row items-center gap-1">
+                      <Ionicons name="warning" size={10} color="#F97316" />
+                      <Text className="text-[10px] text-orange-400 font-bold">{healthDegraded} degradadas</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </SectionHeader>
+
+            <View className="bg-dark-surface border border-dark-border rounded-2xl overflow-hidden">
+              {(healthList ?? []).slice(0, 8).map((branch, idx, arr) => (
+                <BranchHealthRow
+                  key={branch.branchId}
+                  branch={branch}
+                  last={idx === arr.length - 1}
+                />
+              ))}
+            </View>
+
+            {(healthList ?? []).length > 8 && (
+              <Text className="text-content-muted text-xs text-center">
+                +{(healthList ?? []).length - 8} sucursales más
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* ── Quick actions ── */}
+        <SectionHeader title="Acceso rápido" />
         <View className="flex-row gap-3">
           <QuickAction
             icon="mail-outline"
@@ -229,6 +322,32 @@ export default function DashboardScreen() {
 }
 
 /* ─── Sub-components ─── */
+
+function SectionHeader({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: { label: string; onPress: () => void };
+  children?: React.ReactNode;
+}) {
+  return (
+    <View className="flex-row items-center justify-between px-1 mb-0.5 mt-1">
+      <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider">
+        {title}
+      </Text>
+      <View className="flex-row items-center gap-2">
+        {children}
+        {action && (
+          <TouchableOpacity onPress={action.onPress}>
+            <Text className="text-brand-light text-xs">{action.label}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
 
 function StatCard({
   label,
@@ -290,5 +409,60 @@ function QuickAction({
       </View>
       <Text className="text-content-muted text-[10px] text-center leading-3">{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+function BranchHealthRow({
+  branch,
+  last,
+}: {
+  branch: BranchHealthSummary;
+  last: boolean;
+}) {
+  const s = HEALTH_STATUS[branch.status] ?? HEALTH_STATUS.UNKNOWN;
+
+  return (
+    <View
+      className={`flex-row items-center px-4 py-3 gap-3 ${!last ? "border-b border-dark-border" : ""}`}
+    >
+      {/* Status indicator */}
+      <View
+        className={`w-8 h-8 rounded-xl items-center justify-center ${s.bg} border ${s.border}`}
+      >
+        <Ionicons name={s.icon as keyof typeof Ionicons.glyphMap} size={14} color={s.color} />
+      </View>
+
+      {/* Branch + client info */}
+      <View className="flex-1 min-w-0">
+        <Text className="text-content-primary text-sm font-semibold" numberOfLines={1}>
+          {branch.branchName}
+        </Text>
+        <Text className="text-content-muted text-xs" numberOfLines={1}>
+          {branch.clientName}
+        </Text>
+      </View>
+
+      {/* Right side: latency + incidents + status pill */}
+      <View className="items-end gap-1">
+        <View
+          className={`px-2 py-0.5 rounded-full ${s.bg} border ${s.border}`}
+        >
+          <Text className="text-[10px] font-bold" style={{ color: s.color }}>
+            {s.label}
+          </Text>
+        </View>
+        <View className="flex-row items-center gap-2">
+          {branch.latencyMs !== null && (
+            <Text className="text-content-muted text-[10px]">{branch.latencyMs}ms</Text>
+          )}
+          {branch.openIncidents > 0 && (
+            <View className="flex-row items-center gap-0.5">
+              <Ionicons name="alert-circle-outline" size={10} color="#EF4444" />
+              <Text className="text-red-400 text-[10px] font-semibold">{branch.openIncidents}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
   );
 }

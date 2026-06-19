@@ -547,16 +547,15 @@ function DetailRow({
 }) {
   return (
     <View
-      className={`flex-row items-start justify-between py-1.5 ${
-        !last ? "border-b border-dark-border/50" : ""
-      }`}
+      className={`py-2.5 ${!last ? "border-b border-dark-border/40" : ""}`}
     >
-      <Text className="text-content-muted text-xs w-28">{label}</Text>
+      <Text className="text-content-muted text-[10px] font-semibold uppercase tracking-wider mb-0.5">
+        {label}
+      </Text>
       <Text
-        className={`text-xs flex-1 text-right font-medium ${
+        className={`text-sm font-medium leading-5 ${
           warning ? "text-red-400" : "text-content-secondary"
         }`}
-        numberOfLines={2}
         selectable
       >
         {value}

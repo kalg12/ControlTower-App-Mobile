@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useAuthStore } from "@/stores/auth.store";
 
 export default function SettingsScreen() {
@@ -52,9 +53,18 @@ export default function SettingsScreen() {
       {/* Profile card */}
       <View className="mx-4 mt-4 bg-dark-surface border border-dark-border rounded-2xl p-5">
         <View className="flex-row items-center gap-4">
-          <View className="w-14 h-14 rounded-2xl bg-brand items-center justify-center">
-            <Text className="text-white text-xl font-bold">{initials}</Text>
-          </View>
+          {user?.avatarUrl ? (
+            <Image
+              source={{ uri: user.avatarUrl }}
+              style={{ width: 56, height: 56, borderRadius: 16 }}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <View className="w-14 h-14 rounded-2xl bg-brand items-center justify-center">
+              <Text className="text-white text-xl font-bold">{initials}</Text>
+            </View>
+          )}
           <View className="flex-1">
             <Text className="text-content-primary font-bold text-base">{user?.fullName}</Text>
             <Text className="text-content-secondary text-sm mt-0.5">{user?.email}</Text>
