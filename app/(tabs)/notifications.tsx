@@ -34,7 +34,7 @@ export default function NotificationsScreen() {
   function handleTap(item: PushNotificationItem) {
     if (!item.readAt) markRead.mutate(item.id);
     if (item.data.ticketId) {
-      router.push(`/(tabs)/tickets/${item.data.ticketId}`);
+      router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: item.data.ticketId } });
     }
   }
 

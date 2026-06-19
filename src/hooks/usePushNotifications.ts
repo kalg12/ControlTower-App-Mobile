@@ -31,7 +31,7 @@ export function usePushNotifications() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as { ticketId?: string };
       if (data?.ticketId) {
-        router.push(`/(tabs)/tickets/${data.ticketId}`);
+        router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: data.ticketId } });
       }
     });
 

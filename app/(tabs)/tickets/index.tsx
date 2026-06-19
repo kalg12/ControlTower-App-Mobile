@@ -130,7 +130,7 @@ export default function TicketListScreen() {
 function TicketCard({ ticket }: { ticket: Ticket }) {
   return (
     <TouchableOpacity
-      onPress={() => router.push(`/(tabs)/tickets/${ticket.id}`)}
+      onPress={() => router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: ticket.id } })}
       className="mx-4 my-1 bg-white rounded-2xl p-4 shadow-sm"
     >
       <View className="flex-row items-center mb-2">
