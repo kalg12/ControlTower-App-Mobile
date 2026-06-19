@@ -13,6 +13,23 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * GUARDIA DE AUTENTICACIÓN — componente sin UI que protege todas las rutas.
+ *
+ * ¿Por qué un componente separado y no lógica directa en RootLayout?
+ * useSegments() necesita estar dentro del árbol de expo-router (dentro de <Stack>).
+ * Al separarlo como componente hijo de QueryClientProvider/Stack, puede leer
+ * los segmentos de la URL activa y redirigir sin romper el árbol de React.
+ *
+ * Flujo:
+ * - Si no está autenticado y no está en "(auth)": redirige a login.
+ * - Si está autenticado y está en "(auth)" (ej: volvió atrás al login): redirige al dashboard.
+ * - No hace nada mientras hydrated es false: esperamos a que SecureStore termine de leer.
+ *
+ * ¿Por qué router.replace() y no router.push()?
+ * replace() reemplaza la pantalla en el historial de navegación.
+ * Con push() el usuario podría presionar "Atrás" y volver a la pantalla protegida.
+ */
 function AuthGuard() {
   const { isAuthenticated, hydrated } = useAuthStore();
   const segments = useSegments();
@@ -40,9 +57,12 @@ export default function RootLayout() {
   }, []);
 
   if (!hydrated) {
+    // Mientras se leen los tokens de SecureStore mostramos un splash propio.
+    // El fondo debe ser oscuro (#0C0C14) para que no haya un "flash blanco"
+    // visible al usuario entre el splash del SO y la app real.
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}>
-        <ActivityIndicator size="large" color="#F96E1B" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0C0C14" }}>
+        <ActivityIndicator size="large" color="#7C3AED" />
       </View>
     );
   }
