@@ -72,25 +72,36 @@ const SOURCE_LABELS: Record<TicketSource, string> = {
 /* ─── Screen ─── */
 
 export default function TicketListScreen() {
-  const {
-    initialStatus,
-    slaAtRisk,
-    assigneeId,
-  } = useLocalSearchParams<{ initialStatus?: string; slaAtRisk?: string; assigneeId?: string }>();
+  const params = useLocalSearchParams<{
+    initialStatus?: string;
+    slaAtRisk?: string;
+    assigneeId?: string;
+  }>();
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeStatus, setActiveStatus] = useState<TicketStatus | undefined>(
-    (initialStatus as TicketStatus) || "OPEN"
+    (params.initialStatus as TicketStatus) || "OPEN"
   );
   const [filterPriority, setFilterPriority] = useState<TicketPriority | undefined>();
   const [filterSource, setFilterSource] = useState<TicketSource | undefined>();
+  // URL params → local state so clearAllFilters can wipe them
+  const [filterSlaAtRisk, setFilterSlaAtRisk] = useState(params.slaAtRisk === "true");
+  const [filterAssigneeId, setFilterAssigneeId] = useState(params.assigneeId ?? "");
   const [showFilters, setShowFilters] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const initializedRef = useRef(false);
 
+  // Sync URL params into local state when the screen is navigated to from the dashboard
   useEffect(() => {
-    if (initialStatus) setActiveStatus(initialStatus as TicketStatus);
-  }, [initialStatus]);
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    if (params.initialStatus) setActiveStatus(params.initialStatus as TicketStatus);
+    setFilterSlaAtRisk(params.slaAtRisk === "true");
+    setFilterAssigneeId(params.assigneeId ?? "");
+  }, [params.initialStatus, params.slaAtRisk, params.assigneeId]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
@@ -98,12 +109,12 @@ export default function TicketListScreen() {
     return () => clearTimeout(debounceRef.current);
   }, [search]);
 
-  const hasActiveFilters = !!(filterPriority || filterSource || slaAtRisk === "true" || assigneeId);
+  const hasActiveFilters = !!(filterPriority || filterSource || filterSlaAtRisk || filterAssigneeId);
   const activeFilterCount =
     (filterPriority ? 1 : 0) +
     (filterSource ? 1 : 0) +
-    (slaAtRisk === "true" ? 1 : 0) +
-    (assigneeId ? 1 : 0);
+    (filterSlaAtRisk ? 1 : 0) +
+    (filterAssigneeId ? 1 : 0);
 
   const { data: statsData, refetch: refetchStats } = useTicketStats();
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch: refetchList } =
@@ -112,8 +123,8 @@ export default function TicketListScreen() {
       q: debouncedSearch || undefined,
       priority: filterPriority,
       source: filterSource,
-      slaAtRisk: slaAtRisk === "true" ? true : undefined,
-      assigneeId: assigneeId || undefined,
+      slaAtRisk: filterSlaAtRisk ? true : undefined,
+      assigneeId: filterAssigneeId || undefined,
     });
 
   function handleRefresh() {
@@ -131,6 +142,8 @@ export default function TicketListScreen() {
   function clearAllFilters() {
     setFilterPriority(undefined);
     setFilterSource(undefined);
+    setFilterSlaAtRisk(false);
+    setFilterAssigneeId("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
@@ -215,26 +228,32 @@ export default function TicketListScreen() {
                 <Ionicons name="close" size={9} color="#A78BFA" />
               </TouchableOpacity>
             )}
-            {slaAtRisk === "true" && (
-              <View className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/15 border border-orange-500/30">
+            {filterSlaAtRisk && (
+              <TouchableOpacity
+                onPress={() => setFilterSlaAtRisk(false)}
+                className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/15 border border-orange-500/30"
+              >
                 <Ionicons name="timer-outline" size={9} color="#F97316" />
                 <Text className="text-[10px] font-semibold text-orange-400">SLA en riesgo</Text>
-              </View>
-            )}
-            {assigneeId && (
-              <View className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-brand/15 border border-brand/30">
-                <Ionicons name="person-outline" size={9} color="#A78BFA" />
-                <Text className="text-[10px] font-semibold text-brand-light">Asignados a mí</Text>
-              </View>
-            )}
-            {(filterPriority || filterSource) && (
-              <TouchableOpacity
-                onPress={clearAllFilters}
-                className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-dark-raised border border-dark-border"
-              >
-                <Text className="text-[10px] text-content-muted">Limpiar</Text>
+                <Ionicons name="close" size={9} color="#F97316" />
               </TouchableOpacity>
             )}
+            {filterAssigneeId && (
+              <TouchableOpacity
+                onPress={() => setFilterAssigneeId("")}
+                className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-brand/15 border border-brand/30"
+              >
+                <Ionicons name="person-outline" size={9} color="#A78BFA" />
+                <Text className="text-[10px] font-semibold text-brand-light">Asignados a mí</Text>
+                <Ionicons name="close" size={9} color="#A78BFA" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={clearAllFilters}
+              className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-dark-raised border border-dark-border"
+            >
+              <Text className="text-[10px] text-content-muted">Limpiar todo</Text>
+            </TouchableOpacity>
           </ScrollView>
         )}
       </View>
@@ -301,7 +320,7 @@ export default function TicketListScreen() {
               {(hasActiveFilters || search) && (
                 <TouchableOpacity
                   onPress={() => { clearAllFilters(); setSearch(""); }}
-                  className="mt-3 flex-row items-center gap-1"
+                  className="mt-3 px-4 py-2 bg-dark-raised border border-dark-border rounded-xl"
                 >
                   <Text className="text-brand-light text-sm">Limpiar filtros</Text>
                 </TouchableOpacity>
@@ -319,6 +338,7 @@ export default function TicketListScreen() {
         source={filterSource}
         onPriority={setFilterPriority}
         onSource={setFilterSource}
+        onClearAll={clearAllFilters}
         onClose={() => setShowFilters(false)}
       />
     </View>
@@ -409,6 +429,7 @@ function FilterModal({
   source,
   onPriority,
   onSource,
+  onClearAll,
   onClose,
 }: {
   visible: boolean;
@@ -416,6 +437,7 @@ function FilterModal({
   source: TicketSource | undefined;
   onPriority: (p: TicketPriority | undefined) => void;
   onSource: (s: TicketSource | undefined) => void;
+  onClearAll: () => void;
   onClose: () => void;
 }) {
   return (
@@ -437,7 +459,7 @@ function FilterModal({
         <View className="flex-row items-center justify-between mb-5">
           <Text className="text-content-primary font-bold text-base">Filtros</Text>
           <TouchableOpacity
-            onPress={() => { onPriority(undefined); onSource(undefined); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            onPress={() => { onClearAll(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           >
             <Text className="text-brand-light text-sm">Limpiar todo</Text>
           </TouchableOpacity>
