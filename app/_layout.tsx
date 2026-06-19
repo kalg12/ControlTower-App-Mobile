@@ -4,6 +4,7 @@ import { Stack, router, useSegments } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAuthStore } from "@/stores/auth.store";
+import { useThemeStore } from "@/stores/theme.store";
 import "../global.css";
 
 const queryClient = new QueryClient({
@@ -31,9 +32,11 @@ function AuthGuard() {
 
 export default function RootLayout() {
   const { hydrate, hydrated } = useAuthStore();
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
 
   useEffect(() => {
     hydrate();
+    hydrateTheme();
   }, []);
 
   if (!hydrated) {
