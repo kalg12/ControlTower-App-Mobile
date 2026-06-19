@@ -4,6 +4,7 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -13,9 +14,11 @@ import {
   ScrollView,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import {
   useTicket,
   useTicketComments,
@@ -69,6 +72,7 @@ export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [reply, setReply] = useState("");
   const [tab, setTab] = useState<"conversation" | "details">("conversation");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const flatRef = useRef<FlatList>(null);
 
   const { data: ticket, isLoading: loadingTicket } = useTicket(id);
@@ -76,19 +80,53 @@ export default function TicketDetailScreen() {
   const addComment = useAddComment(id);
   const updateStatus = useUpdateTicketStatus(id);
 
-  // Fetch client name if clientId is present
   const { data: client } = useQuery({
     queryKey: ["client", ticket?.clientId],
     queryFn: async () => {
       const res = await apiClient.get(`/api/v1/clients/${ticket!.clientId}`);
-      return res.data as { name: string; primaryEmail?: string; primaryContactName?: string };
+      return res.data as {
+        name: string;
+        primaryEmail?: string;
+        primaryContactName?: string;
+        primaryPhone?: string;
+        status?: string;
+      };
     },
     enabled: !!ticket?.clientId,
     staleTime: 300_000,
   });
 
+  const handleCopy = useCallback(async (comment: TicketComment) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await Clipboard.setStringAsync(comment.content);
+    setCopiedId(comment.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
+  function handleLongPress(comment: TicketComment) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Copiar mensaje", "Cancelar"],
+          cancelButtonIndex: 1,
+          title: comment.authorName ?? undefined,
+        },
+        (idx) => {
+          if (idx === 0) handleCopy(comment);
+        }
+      );
+    } else {
+      Alert.alert(comment.authorName ?? "Mensaje", undefined, [
+        { text: "Copiar", onPress: () => handleCopy(comment) },
+        { text: "Cancelar", style: "cancel" },
+      ]);
+    }
+  }
+
   function handleSend() {
     if (!reply.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     addComment.mutate(reply.trim(), {
       onSuccess: () => {
         setReply("");
@@ -99,26 +137,27 @@ export default function TicketDetailScreen() {
   }
 
   function handleChangeStatus() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const options = STATUS_OPTIONS.map((s) => STATUS_LABELS[s]);
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...options, "Cancelar"], cancelButtonIndex: options.length },
+        {
+          options: [...options, "Cancelar"],
+          cancelButtonIndex: options.length,
+          title: "Cambiar estado del ticket",
+        },
         (idx) => {
           if (idx < STATUS_OPTIONS.length) updateStatus.mutate(STATUS_OPTIONS[idx]);
         }
       );
     } else {
-      Alert.alert(
-        "Cambiar estado",
-        undefined,
-        [
-          ...STATUS_OPTIONS.map((s) => ({
-            text: STATUS_LABELS[s],
-            onPress: () => updateStatus.mutate(s),
-          })),
-          { text: "Cancelar", style: "cancel" as const },
-        ]
-      );
+      Alert.alert("Cambiar estado", undefined, [
+        ...STATUS_OPTIONS.map((s) => ({
+          text: STATUS_LABELS[s],
+          onPress: () => updateStatus.mutate(s),
+        })),
+        { text: "Cancelar", style: "cancel" as const },
+      ]);
     }
   }
 
@@ -160,36 +199,41 @@ export default function TicketDetailScreen() {
     >
       <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
 
-      {/* Custom header */}
+      {/* ── Custom header ── */}
       <View className="bg-dark-surface border-b border-dark-border pt-14 pb-0">
-        {/* Navigation row */}
+
+        {/* Nav row: back + ticket ID + status pill */}
         <View className="flex-row items-center px-4 pb-3">
-          <TouchableOpacity onPress={() => router.back()} className="flex-row items-center gap-1 mr-3">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="flex-row items-center gap-1 mr-3"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="chevron-back" size={20} color="#8888A0" />
             <Text className="text-content-secondary text-sm">Tickets</Text>
           </TouchableOpacity>
-          <Text className="text-content-primary font-semibold text-sm flex-1" numberOfLines={1}>
-            #{id.slice(0, 8)}
-          </Text>
+          <Text className="text-content-muted font-mono text-xs flex-1">#{id.slice(0, 8).toUpperCase()}</Text>
           <TouchableOpacity
             onPress={handleChangeStatus}
-            className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full ${statusStyle.bg}`}
+            className={`flex-row items-center gap-1 px-3 py-1.5 rounded-full ${statusStyle.bg}`}
           >
             <Text className={`text-xs font-bold ${statusStyle.text}`}>
               {STATUS_LABELS[ticket.status]}
             </Text>
-            <Ionicons name="chevron-down" size={11} color="#8888A0" />
+            {updateStatus.isPending
+              ? <ActivityIndicator size={10} color="#8888A0" />
+              : <Ionicons name="chevron-down" size={11} color="#8888A0" />}
           </TouchableOpacity>
         </View>
 
         {/* Title */}
-        <View className="px-4 pb-3">
+        <View className="px-4 pb-2.5">
           <Text className="text-content-primary font-bold text-base leading-6">
             {ticket.title}
           </Text>
         </View>
 
-        {/* Badges row */}
+        {/* Badges */}
         <View className="flex-row flex-wrap gap-2 px-4 pb-3 items-center">
           <View className={`px-2.5 py-1 rounded-full ${priorityStyle.bg}`}>
             <Text className={`text-[10px] font-bold ${priorityStyle.text}`}>
@@ -208,7 +252,6 @@ export default function TicketDetailScreen() {
             </View>
           ))}
 
-          {/* SLA */}
           {slaBreached ? (
             <View className="bg-red-500/15 border border-red-500/30 px-2.5 py-1 rounded-full flex-row items-center gap-1">
               <Ionicons name="warning" size={10} color="#EF4444" />
@@ -227,7 +270,7 @@ export default function TicketDetailScreen() {
           ) : null}
         </View>
 
-        {/* Client info row */}
+        {/* Client row */}
         {client && (
           <View className="flex-row items-center gap-2 px-4 pb-3">
             <View className="w-6 h-6 rounded-full bg-brand/20 items-center justify-center">
@@ -245,52 +288,32 @@ export default function TicketDetailScreen() {
 
         {/* Tabs */}
         <View className="flex-row border-t border-dark-border">
-          <TouchableOpacity
-            onPress={() => setTab("conversation")}
-            className={`flex-1 py-3 items-center border-b-2 ${
-              tab === "conversation" ? "border-brand" : "border-transparent"
-            }`}
-          >
-            <View className="flex-row items-center gap-1.5">
-              <Ionicons
-                name="chatbubbles-outline"
-                size={14}
-                color={tab === "conversation" ? "#7C3AED" : "#4A4A5C"}
-              />
-              <Text
-                className={`text-xs font-semibold ${
-                  tab === "conversation" ? "text-brand-light" : "text-content-muted"
-                }`}
-              >
-                Conversación {(comments?.length ?? 0) > 0 ? `(${comments!.length})` : ""}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setTab("details")}
-            className={`flex-1 py-3 items-center border-b-2 ${
-              tab === "details" ? "border-brand" : "border-transparent"
-            }`}
-          >
-            <View className="flex-row items-center gap-1.5">
-              <Ionicons
-                name="information-circle-outline"
-                size={14}
-                color={tab === "details" ? "#7C3AED" : "#4A4A5C"}
-              />
-              <Text
-                className={`text-xs font-semibold ${
-                  tab === "details" ? "text-brand-light" : "text-content-muted"
-                }`}
-              >
-                Detalles
-              </Text>
-            </View>
-          </TouchableOpacity>
+          {(["conversation", "details"] as const).map((t) => (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setTab(t)}
+              className={`flex-1 py-3 items-center border-b-2 ${
+                tab === t ? "border-brand" : "border-transparent"
+              }`}
+            >
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons
+                  name={t === "conversation" ? "chatbubbles-outline" : "information-circle-outline"}
+                  size={14}
+                  color={tab === t ? "#7C3AED" : "#4A4A5C"}
+                />
+                <Text className={`text-xs font-semibold ${tab === t ? "text-brand-light" : "text-content-muted"}`}>
+                  {t === "conversation"
+                    ? `Conversación${(comments?.length ?? 0) > 0 ? ` (${comments!.length})` : ""}`
+                    : "Detalles"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
-      {/* Body */}
+      {/* ── Body ── */}
       {tab === "conversation" ? (
         <>
           {loadingComments ? (
@@ -302,19 +325,29 @@ export default function TicketDetailScreen() {
               ref={flatRef}
               data={comments ?? []}
               keyExtractor={(c) => c.id}
-              renderItem={({ item }) => <MessageBubble comment={item} />}
+              renderItem={({ item }) => (
+                <MessageBubble
+                  comment={item}
+                  copied={copiedId === item.id}
+                  onLongPress={() => handleLongPress(item)}
+                  onCopy={() => handleCopy(item)}
+                />
+              )}
               contentContainerStyle={{ padding: 12, paddingBottom: 8 }}
               ListEmptyComponent={
                 <View className="items-center py-16">
                   <Ionicons name="chatbubble-outline" size={40} color="#2A2A3C" />
                   <Text className="text-content-muted text-sm mt-3">Sin mensajes todavía</Text>
+                  <Text className="text-content-muted text-xs mt-1">
+                    Escribe la primera respuesta abajo
+                  </Text>
                 </View>
               }
               onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
             />
           )}
 
-          {/* Reply input */}
+          {/* Reply bar */}
           <View className="bg-dark-surface border-t border-dark-border px-3 py-3 flex-row items-end gap-2">
             <TextInput
               className="flex-1 bg-dark-raised border border-dark-border rounded-2xl px-4 py-3 text-content-primary text-sm max-h-28"
@@ -351,13 +384,18 @@ export default function TicketDetailScreen() {
           {/* POS context */}
           {ticket.posContext && Object.keys(ticket.posContext).length > 0 && (
             <DetailSection title="Contexto POS" icon="storefront-outline">
-              {Object.entries(ticket.posContext).map(([k, v]) => (
-                <DetailRow key={k} label={k} value={String(v)} />
+              {Object.entries(ticket.posContext).map(([k, v], i, arr) => (
+                <DetailRow
+                  key={k}
+                  label={k}
+                  value={String(v)}
+                  last={i === arr.length - 1}
+                />
               ))}
             </DetailSection>
           )}
 
-          {/* Timeline info */}
+          {/* Info */}
           <DetailSection title="Información" icon="information-circle-outline">
             <DetailRow label="Estado" value={STATUS_LABELS[ticket.status]} />
             <DetailRow label="Prioridad" value={PRIORITY_LABELS[ticket.priority]} />
@@ -365,44 +403,55 @@ export default function TicketDetailScreen() {
             {ticket.estimatedMinutes ? (
               <DetailRow
                 label="Tiempo estimado"
-                value={ticket.estimatedMinutes >= 60
-                  ? `${Math.floor(ticket.estimatedMinutes / 60)}h ${ticket.estimatedMinutes % 60}m`
-                  : `${ticket.estimatedMinutes}m`}
+                value={
+                  ticket.estimatedMinutes >= 60
+                    ? `${Math.floor(ticket.estimatedMinutes / 60)}h ${ticket.estimatedMinutes % 60}m`
+                    : `${ticket.estimatedMinutes}m`
+                }
               />
             ) : null}
             {ticket.slaDueAt ? (
               <DetailRow
                 label="SLA vence"
                 value={new Date(ticket.slaDueAt).toLocaleString("es-MX", {
-                  dateStyle: "medium", timeStyle: "short",
+                  dateStyle: "medium",
+                  timeStyle: "short",
                 })}
-                warning={slaBreached}
+                warning={!!slaBreached}
               />
             ) : null}
             <DetailRow label="Comentarios" value={String(ticket.commentsCount)} />
             <DetailRow
               label="Creado"
               value={new Date(ticket.createdAt).toLocaleString("es-MX", {
-                dateStyle: "medium", timeStyle: "short",
+                dateStyle: "medium",
+                timeStyle: "short",
               })}
             />
-            <DetailRow
-              label="Actualizado"
-              value={timeAgo(ticket.updatedAt)}
-              last
-            />
+            <DetailRow label="Actualizado" value={timeAgo(ticket.updatedAt)} last />
           </DetailSection>
 
           {/* Client */}
           {client && (
             <DetailSection title="Cliente" icon="business-outline">
               <DetailRow label="Nombre" value={client.name} />
-              {client.primaryContactName && (
-                <DetailRow label="Contacto" value={client.primaryContactName} last={!client.primaryEmail} />
-              )}
-              {client.primaryEmail && (
+              {client.primaryContactName ? (
+                <DetailRow
+                  label="Contacto"
+                  value={client.primaryContactName}
+                  last={!client.primaryEmail && !client.primaryPhone}
+                />
+              ) : null}
+              {client.primaryPhone ? (
+                <DetailRow
+                  label="Teléfono"
+                  value={client.primaryPhone}
+                  last={!client.primaryEmail}
+                />
+              ) : null}
+              {client.primaryEmail ? (
                 <DetailRow label="Email" value={client.primaryEmail} last />
-              )}
+              ) : null}
             </DetailSection>
           )}
 
@@ -425,6 +474,77 @@ export default function TicketDetailScreen() {
 }
 
 /* ─── Sub-components ─── */
+
+function MessageBubble({
+  comment,
+  copied,
+  onLongPress,
+  onCopy,
+}: {
+  comment: TicketComment;
+  copied: boolean;
+  onLongPress: () => void;
+  onCopy: () => void;
+}) {
+  const isAgent = comment.senderType === "AGENT";
+  const isSystem = comment.senderType === "SYSTEM";
+
+  if (isSystem) {
+    return (
+      <View className="items-center my-2">
+        <Text className="text-xs text-content-muted bg-dark-raised px-3 py-1 rounded-full">
+          {comment.content}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View className={`mb-3 max-w-[85%] ${isAgent ? "self-end" : "self-start"}`}>
+      {!isAgent && comment.authorName && (
+        <View className="flex-row items-center gap-1 mb-1 ml-1">
+          <Ionicons name="mail-outline" size={10} color="#4A4A5C" />
+          <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
+        </View>
+      )}
+
+      <TouchableWithoutFeedback onLongPress={onLongPress} delayLongPress={400}>
+        <View
+          className={`rounded-2xl px-4 py-3 ${
+            isAgent
+              ? "bg-brand rounded-tr-sm"
+              : "bg-dark-raised border border-dark-border rounded-tl-sm"
+          } ${copied ? "opacity-70" : "opacity-100"}`}
+        >
+          <Text
+            className={`text-sm leading-5 ${isAgent ? "text-white" : "text-content-primary"}`}
+            selectable
+          >
+            {comment.content}
+          </Text>
+        </View>
+      </TouchableWithoutFeedback>
+
+      {/* Footer: time + copy feedback */}
+      <View className={`flex-row items-center gap-2 mt-1 ${isAgent ? "justify-end mr-1" : "ml-1"}`}>
+        {isAgent && comment.authorName && (
+          <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
+        )}
+        <Text className="text-content-muted text-[10px]">{timeAgo(comment.createdAt)}</Text>
+        {copied ? (
+          <View className="flex-row items-center gap-0.5">
+            <Ionicons name="checkmark-circle" size={10} color="#34D399" />
+            <Text className="text-emerald-400 text-[10px] font-semibold">Copiado</Text>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={onCopy} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Ionicons name="copy-outline" size={11} color="#4A4A5C" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
 
 function DetailSection({
   title,
@@ -471,52 +591,10 @@ function DetailRow({
           warning ? "text-red-400" : "text-content-secondary"
         }`}
         numberOfLines={2}
+        selectable
       >
         {value}
       </Text>
-    </View>
-  );
-}
-
-function MessageBubble({ comment }: { comment: TicketComment }) {
-  const isAgent = comment.senderType === "AGENT";
-  const isSystem = comment.senderType === "SYSTEM";
-
-  if (isSystem) {
-    return (
-      <View className="items-center my-2">
-        <Text className="text-xs text-content-muted bg-dark-raised px-3 py-1 rounded-full">
-          {comment.content}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View className={`mb-3 max-w-[85%] ${isAgent ? "self-end" : "self-start"}`}>
-      {!isAgent && comment.authorName && (
-        <View className="flex-row items-center gap-1 mb-1 ml-1">
-          <Ionicons name="mail-outline" size={10} color="#4A4A5C" />
-          <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
-        </View>
-      )}
-      <View
-        className={`rounded-2xl px-4 py-3 ${
-          isAgent
-            ? "bg-brand rounded-tr-sm"
-            : "bg-dark-raised border border-dark-border rounded-tl-sm"
-        }`}
-      >
-        <Text className={`text-sm leading-5 ${isAgent ? "text-white" : "text-content-primary"}`}>
-          {comment.content}
-        </Text>
-      </View>
-      <View className={`flex-row items-center gap-1 mt-1 ${isAgent ? "justify-end mr-1" : "ml-1"}`}>
-        {isAgent && comment.authorName && (
-          <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
-        )}
-        <Text className="text-content-muted text-[10px]">{timeAgo(comment.createdAt)}</Text>
-      </View>
     </View>
   );
 }
