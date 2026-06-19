@@ -99,7 +99,9 @@ export default function DashboardScreen() {
       const res = await apiClient.get("/api/v1/dashboard");
       return res.data;
     },
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 
@@ -210,7 +212,10 @@ export default function DashboardScreen() {
             </>
           )}
 
-          {/* ── Ticket status grid ── */}
+          {/* ── Ticket status grid ──
+               Fuente: /api/v1/tickets/stats → byStatus tiene conteos exactos por estado.
+               dash.openTickets suma OPEN + IN_PROGRESS (todos los activos), por eso no
+               sirve para separar "Abiertos" de "En progreso" individualmente.          */}
           {ticketStats && (
             <>
               <SectionHeader
@@ -218,20 +223,36 @@ export default function DashboardScreen() {
                 action={{ label: "Ver todos", onPress: () => router.push("/(tabs)/tickets") }}
               />
               <View className="flex-row gap-3">
-                <StatCard label="Abiertos" value={ticketStats.byStatus.OPEN ?? 0}
+                <StatCard
+                  label="Abiertos"
+                  value={ticketStats.byStatus.OPEN ?? 0}
                   color="text-blue-400" bg="bg-blue-500/10" border="border-blue-500/20"
-                  icon="mail-open-outline" iconColor="#60A5FA" onPress={() => goToTickets("OPEN")} />
-                <StatCard label="En progreso" value={ticketStats.byStatus.IN_PROGRESS ?? 0}
+                  icon="mail-open-outline" iconColor="#60A5FA"
+                  onPress={() => goToTickets("OPEN")}
+                />
+                <StatCard
+                  label="En progreso"
+                  value={ticketStats.byStatus.IN_PROGRESS ?? 0}
                   color="text-amber-400" bg="bg-amber-500/10" border="border-amber-500/20"
-                  icon="play-circle-outline" iconColor="#FBBF24" onPress={() => goToTickets("IN_PROGRESS")} />
+                  icon="play-circle-outline" iconColor="#FBBF24"
+                  onPress={() => goToTickets("IN_PROGRESS")}
+                />
               </View>
               <View className="flex-row gap-3">
-                <StatCard label="En espera" value={ticketStats.byStatus.WAITING ?? 0}
+                <StatCard
+                  label="En espera"
+                  value={ticketStats.byStatus.WAITING ?? 0}
                   color="text-yellow-400" bg="bg-yellow-500/10" border="border-yellow-500/20"
-                  icon="pause-circle-outline" iconColor="#FDE047" onPress={() => goToTickets("WAITING")} />
-                <StatCard label="Resueltos" value={ticketStats.byStatus.RESOLVED ?? 0}
+                  icon="pause-circle-outline" iconColor="#FDE047"
+                  onPress={() => goToTickets("WAITING")}
+                />
+                <StatCard
+                  label="Resueltos"
+                  value={ticketStats.byStatus.RESOLVED ?? 0}
                   color="text-emerald-400" bg="bg-emerald-500/10" border="border-emerald-500/20"
-                  icon="checkmark-circle-outline" iconColor="#34D399" onPress={() => goToTickets("RESOLVED")} />
+                  icon="checkmark-circle-outline" iconColor="#34D399"
+                  onPress={() => goToTickets("RESOLVED")}
+                />
               </View>
               <TouchableOpacity
                 onPress={() => router.push("/(tabs)/tickets")}
