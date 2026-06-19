@@ -61,3 +61,10 @@ export interface TicketStats {
   total: number;
   byStatus: Partial<Record<TicketStatus, number>>;
 }
+
+export interface CreateTicketPayload {
+  title: string;
+  description?: string;
+  priority?: TicketPriority;
+  clientId?: string;
+}

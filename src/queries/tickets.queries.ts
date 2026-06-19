@@ -6,8 +6,10 @@ import {
   getTickets,
   getTicketStats,
   updateTicketStatus,
+  createTicket,
+  searchClients,
 } from "@/api/tickets.api";
-import { TicketListParams } from "@/types/ticket";
+import { CreateTicketPayload, TicketListParams } from "@/types/ticket";
 
 export const ticketKeys = {
   all: ["tickets"] as const,
@@ -69,5 +71,24 @@ export function useUpdateTicketStatus(ticketId: string) {
       qc.invalidateQueries({ queryKey: ticketKeys.detail(ticketId) });
       qc.invalidateQueries({ queryKey: ticketKeys.all });
     },
+  });
+}
+
+export function useCreateTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateTicketPayload) => createTicket(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
+    },
+  });
+}
+
+export function useClientSearch(search: string) {
+  return useQuery({
+    queryKey: ["clients", "search", search],
+    queryFn: () => searchClients(search),
+    enabled: search.trim().length >= 2,
+    staleTime: 30_000,
   });
 }

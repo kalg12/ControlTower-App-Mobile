@@ -9,13 +9,20 @@ import {
   StatusBar,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useInfiniteTickets, useTicketStats } from "@/queries/tickets.queries";
+import {
+  useInfiniteTickets,
+  useTicketStats,
+  useCreateTicket,
+  useClientSearch,
+} from "@/queries/tickets.queries";
 import { Ticket, TicketStatus, TicketPriority, TicketSource } from "@/types/ticket";
 import { timeAgo } from "@/utils/timeAgo";
 
@@ -89,6 +96,7 @@ export default function TicketListScreen() {
   const [filterSlaAtRisk, setFilterSlaAtRisk] = useState(params.slaAtRisk === "true");
   const [filterAssigneeId, setFilterAssigneeId] = useState(params.assigneeId ?? "");
   const [showFilters, setShowFilters] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const initializedRef = useRef(false);
 
@@ -331,6 +339,15 @@ export default function TicketListScreen() {
         contentContainerStyle={{ paddingVertical: 8 }}
       />
 
+      {/* ── FAB: nuevo ticket ── */}
+      <TouchableOpacity
+        onPress={() => { setShowCreate(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+        className="absolute bottom-6 right-5 w-14 h-14 bg-brand rounded-full items-center justify-center shadow-lg"
+        style={{ elevation: 6 }}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
+
       {/* ── Filter modal ── */}
       <FilterModal
         visible={showFilters}
@@ -340,6 +357,16 @@ export default function TicketListScreen() {
         onSource={setFilterSource}
         onClearAll={clearAllFilters}
         onClose={() => setShowFilters(false)}
+      />
+
+      {/* ── Create ticket modal ── */}
+      <CreateTicketModal
+        visible={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={(ticketId) => {
+          setShowCreate(false);
+          router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: ticketId } });
+        }}
       />
     </View>
   );
@@ -418,6 +445,275 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
         </View>
       </View>
     </TouchableOpacity>
+  );
+}
+
+/* ─── Create ticket modal ─── */
+
+const PRIORITY_CREATE_OPTIONS: { value: TicketPriority; label: string; colors: string }[] = [
+  { value: "LOW",      label: "Baja",     colors: "bg-dark-raised border-dark-border text-content-secondary" },
+  { value: "MEDIUM",   label: "Media",    colors: "bg-amber-500/15 border-amber-500/30 text-amber-400" },
+  { value: "HIGH",     label: "Alta",     colors: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
+  { value: "CRITICAL", label: "Crítica",  colors: "bg-red-500/15 border-red-500/30 text-red-400" },
+];
+
+function CreateTicketModal({
+  visible,
+  onClose,
+  onCreated,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreated: (ticketId: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<TicketPriority>("MEDIUM");
+  const [clientSearch, setClientSearch] = useState("");
+  const [debouncedClientSearch, setDebouncedClientSearch] = useState("");
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string; primaryEmail?: string } | null>(null);
+  const [titleError, setTitleError] = useState(false);
+  const clientDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const createTicket = useCreateTicket();
+  const { data: clientResults, isFetching: searchingClients } = useClientSearch(debouncedClientSearch);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (visible) {
+      setTitle("");
+      setDescription("");
+      setPriority("MEDIUM");
+      setClientSearch("");
+      setDebouncedClientSearch("");
+      setSelectedClient(null);
+      setTitleError(false);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    clearTimeout(clientDebounceRef.current);
+    clientDebounceRef.current = setTimeout(() => setDebouncedClientSearch(clientSearch), 400);
+    return () => clearTimeout(clientDebounceRef.current);
+  }, [clientSearch]);
+
+  function handleSubmit() {
+    if (!title.trim()) {
+      setTitleError(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    createTicket.mutate(
+      {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        priority,
+        clientId: selectedClient?.id,
+      },
+      {
+        onSuccess: (ticket) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          onCreated(ticket.id);
+        },
+        onError: () => {
+          Alert.alert("Error", "No se pudo crear el ticket. Intenta de nuevo.");
+        },
+      }
+    );
+  }
+
+  const showClientResults =
+    debouncedClientSearch.length >= 2 && !selectedClient && (clientResults?.length ?? 0) > 0;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View className="flex-1 bg-black/60 justify-end">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          <View className="bg-dark-surface border-t border-dark-border rounded-t-3xl"
+            style={{ maxHeight: "92%" }}>
+            {/* Handle */}
+            <View className="w-10 h-1 bg-dark-border rounded-full self-center mt-3 mb-1" />
+
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-5 py-4 border-b border-dark-border">
+              <TouchableOpacity onPress={onClose} className="p-1">
+                <Text className="text-content-muted text-sm">Cancelar</Text>
+              </TouchableOpacity>
+              <Text className="text-content-primary font-bold text-base">Nuevo ticket</Text>
+              <TouchableOpacity
+                onPress={handleSubmit}
+                disabled={createTicket.isPending}
+                className={`px-4 py-1.5 rounded-xl ${createTicket.isPending ? "bg-brand/40" : "bg-brand"}`}
+              >
+                {createTicket.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-white font-semibold text-sm">Crear</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Título */}
+              <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                Título <Text className="text-red-400">*</Text>
+              </Text>
+              <TextInput
+                className={`bg-dark-raised border rounded-xl px-4 py-3 text-content-primary text-sm mb-1 ${
+                  titleError ? "border-red-500/60" : "border-dark-border"
+                }`}
+                placeholder="¿En qué consiste el problema?"
+                placeholderTextColor="#4A4A5C"
+                value={title}
+                onChangeText={(v) => { setTitle(v); if (v.trim()) setTitleError(false); }}
+                returnKeyType="next"
+                maxLength={200}
+              />
+              {titleError && (
+                <Text className="text-red-400 text-xs mb-3">El título es obligatorio</Text>
+              )}
+              <Text className="text-content-muted text-[10px] text-right mb-4">
+                {title.length}/200
+              </Text>
+
+              {/* Descripción */}
+              <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                Descripción
+              </Text>
+              <TextInput
+                className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-5"
+                placeholder="Describe el problema con más detalle (opcional)"
+                placeholderTextColor="#4A4A5C"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                style={{ minHeight: 96 }}
+                maxLength={2000}
+              />
+
+              {/* Prioridad */}
+              <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                Prioridad
+              </Text>
+              <View className="flex-row gap-2 mb-5">
+                {PRIORITY_CREATE_OPTIONS.map((opt) => {
+                  const isActive = priority === opt.value;
+                  const [bg, border, textColor] = opt.colors.split(" ");
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => { setPriority(opt.value); Haptics.selectionAsync(); }}
+                      className={`flex-1 py-2.5 rounded-xl border items-center ${
+                        isActive ? `${bg} ${border}` : "bg-dark-raised border-dark-border"
+                      }`}
+                    >
+                      <Text className={`text-xs font-bold ${isActive ? textColor : "text-content-muted"}`}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Cliente */}
+              <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2">
+                Cliente
+              </Text>
+              {selectedClient ? (
+                <View className="flex-row items-center bg-brand/10 border border-brand/30 rounded-xl px-4 py-3 mb-5">
+                  <View className="flex-1">
+                    <Text className="text-content-primary font-semibold text-sm">{selectedClient.name}</Text>
+                    {selectedClient.primaryEmail && (
+                      <Text className="text-content-muted text-xs mt-0.5">{selectedClient.primaryEmail}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { setSelectedClient(null); setClientSearch(""); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#A78BFA" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View className="flex-row items-center bg-dark-raised border border-dark-border rounded-xl px-3 mb-2">
+                    <Ionicons name="search-outline" size={15} color="#4A4A5C" />
+                    <TextInput
+                      className="flex-1 py-3 px-2 text-content-primary text-sm"
+                      placeholder="Buscar por nombre del cliente..."
+                      placeholderTextColor="#4A4A5C"
+                      value={clientSearch}
+                      onChangeText={setClientSearch}
+                      returnKeyType="search"
+                      autoCorrect={false}
+                    />
+                    {searchingClients && <ActivityIndicator size="small" color="#7C3AED" />}
+                    {clientSearch.length > 0 && !searchingClients && (
+                      <TouchableOpacity onPress={() => setClientSearch("")}>
+                        <Ionicons name="close-circle" size={16} color="#4A4A5C" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {showClientResults && (
+                    <View className="bg-dark-raised border border-dark-border rounded-xl overflow-hidden mb-5">
+                      {clientResults!.map((client, idx) => (
+                        <TouchableOpacity
+                          key={client.id}
+                          onPress={() => {
+                            setSelectedClient(client);
+                            setClientSearch("");
+                            Haptics.selectionAsync();
+                          }}
+                          className={`flex-row items-center px-4 py-3 ${
+                            idx < clientResults!.length - 1 ? "border-b border-dark-border" : ""
+                          }`}
+                        >
+                          <View className="w-8 h-8 rounded-lg bg-brand/20 items-center justify-center mr-3">
+                            <Text className="text-brand-light text-xs font-bold">
+                              {client.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-content-primary text-sm font-medium">{client.name}</Text>
+                            {client.primaryEmail && (
+                              <Text className="text-content-muted text-xs mt-0.5">{client.primaryEmail}</Text>
+                            )}
+                          </View>
+                          <Ionicons name="chevron-forward" size={14} color="#4A4A5C" />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  {debouncedClientSearch.length >= 2 && !searchingClients && (clientResults?.length ?? 0) === 0 && (
+                    <View className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 mb-5 flex-row items-center gap-2">
+                      <Ionicons name="search-outline" size={14} color="#4A4A5C" />
+                      <Text className="text-content-muted text-sm">Sin resultados para "{debouncedClientSearch}"</Text>
+                    </View>
+                  )}
+
+                  {clientSearch.length < 2 && (
+                    <Text className="text-content-muted text-xs mb-5">
+                      Escribe al menos 2 caracteres para buscar. El cliente es opcional.
+                    </Text>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
