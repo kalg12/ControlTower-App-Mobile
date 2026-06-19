@@ -6,10 +6,23 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#F96E1B",
-          light: "#FFB38A",
-          dark: "#C94E00",
+          DEFAULT: "#7C3AED",
+          light: "#A78BFA",
+          dark: "#5B21B6",
         },
+        dark: {
+          bg: "#0C0C14",
+          surface: "#14141E",
+          raised: "#1C1C2A",
+          border: "#2A2A3C",
+        },
+        content: {
+          primary: "#E8E8F2",
+          secondary: "#8888A0",
+          muted: "#4A4A5C",
+        },
+        // Keep orange for priority urgency accents
+        urgent: "#F96E1B",
       },
     },
   },

@@ -44,3 +44,8 @@ export interface PageResponse<T> {
   pageSize: number;
   last: boolean;
 }
+
+export interface TicketStats {
+  total: number;
+  byStatus: Partial<Record<TicketStatus, number>>;
+}

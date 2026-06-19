@@ -9,15 +9,23 @@ import {
   ActivityIndicator,
   Alert,
   ActionSheetIOS,
+  StatusBar,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState, useRef } from "react";
-import { useTicket, useTicketComments, useAddComment, useUpdateTicketStatus } from "@/queries/tickets.queries";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  useTicket,
+  useTicketComments,
+  useAddComment,
+  useUpdateTicketStatus,
+} from "@/queries/tickets.queries";
 import { TicketComment, TicketStatus } from "@/types/ticket";
 import { timeAgo } from "@/utils/timeAgo";
 
-const STATUS_OPTIONS: TicketStatus[] = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
-
+const STATUS_OPTIONS: TicketStatus[] = [
+  "OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED",
+];
 const STATUS_LABELS: Record<TicketStatus, string> = {
   OPEN: "Abierto",
   IN_PROGRESS: "En progreso",
@@ -25,19 +33,21 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
   RESOLVED: "Resuelto",
   CLOSED: "Cerrado",
 };
-
-const PRIORITY_LABELS: Record<string, string> = {
-  CRITICAL: "Crítico",
-  HIGH: "Alto",
-  MEDIUM: "Medio",
-  LOW: "Bajo",
+const STATUS_BADGE: Record<TicketStatus, string> = {
+  OPEN:        "bg-blue-500/15 text-blue-400",
+  IN_PROGRESS: "bg-amber-500/15 text-amber-400",
+  WAITING:     "bg-yellow-500/15 text-yellow-300",
+  RESOLVED:    "bg-emerald-500/15 text-emerald-400",
+  CLOSED:      "bg-dark-raised text-content-muted",
 };
-
 const PRIORITY_BADGE: Record<string, string> = {
-  CRITICAL: "bg-red-100 text-red-700",
-  HIGH: "bg-orange-100 text-orange-700",
-  MEDIUM: "bg-yellow-100 text-yellow-700",
-  LOW: "bg-gray-100 text-gray-600",
+  CRITICAL: "bg-red-500/15 text-red-400",
+  HIGH:     "bg-orange-500/15 text-orange-400",
+  MEDIUM:   "bg-amber-500/15 text-amber-400",
+  LOW:      "bg-dark-raised text-content-muted",
+};
+const PRIORITY_LABELS: Record<string, string> = {
+  CRITICAL: "CRÍTICO", HIGH: "ALTO", MEDIUM: "MEDIO", LOW: "BAJO",
 };
 
 export default function TicketDetailScreen() {
@@ -62,82 +72,95 @@ export default function TicketDetailScreen() {
   }
 
   function handleChangeStatus() {
+    const options = STATUS_OPTIONS.map((s) => STATUS_LABELS[s]);
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [...STATUS_OPTIONS.map((s) => STATUS_LABELS[s]), "Cancelar"],
-          cancelButtonIndex: STATUS_OPTIONS.length,
-        },
+        { options: [...options, "Cancelar"], cancelButtonIndex: options.length },
         (idx) => {
-          if (idx < STATUS_OPTIONS.length) {
-            updateStatus.mutate(STATUS_OPTIONS[idx]);
-          }
+          if (idx < STATUS_OPTIONS.length) updateStatus.mutate(STATUS_OPTIONS[idx]);
         }
       );
     } else {
-      Alert.alert(
-        "Cambiar estado",
-        undefined,
-        [
-          ...STATUS_OPTIONS.map((s) => ({
-            text: STATUS_LABELS[s],
-            onPress: () => updateStatus.mutate(s),
-          })),
-          { text: "Cancelar", style: "cancel" as const },
-        ]
-      );
+      Alert.alert("Cambiar estado", undefined, [
+        ...STATUS_OPTIONS.map((s) => ({
+          text: STATUS_LABELS[s],
+          onPress: () => updateStatus.mutate(s),
+        })),
+        { text: "Cancelar", style: "cancel" as const },
+      ]);
     }
   }
 
   if (loadingTicket) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator color="#F96E1B" size="large" />
+      <View className="flex-1 bg-dark-bg items-center justify-center">
+        <ActivityIndicator color="#7C3AED" size="large" />
       </View>
     );
   }
 
   if (!ticket) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-gray-500">Ticket no encontrado</Text>
+      <View className="flex-1 bg-dark-bg items-center justify-center">
+        <Text className="text-content-secondary">Ticket no encontrado</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-gray-50"
+      className="flex-1 bg-dark-bg"
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={90}
     >
+      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+
       {/* Ticket header */}
-      <View className="bg-white border-b border-gray-200 px-4 py-3">
-        <Text className="text-base font-bold text-gray-900 mb-2" numberOfLines={2}>
+      <View className="bg-dark-surface border-b border-dark-border px-4 pt-4 pb-4">
+        <Text className="text-content-primary font-bold text-base leading-6 mb-3" numberOfLines={3}>
           {ticket.title}
         </Text>
-        <View className="flex-row items-center gap-2 flex-wrap">
-          <Badge
-            label={PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
-            className={PRIORITY_BADGE[ticket.priority] ?? "bg-gray-100 text-gray-600"}
-          />
+
+        <View className="flex-row flex-wrap gap-2 items-center">
+          {/* Status — tappable */}
           <TouchableOpacity onPress={handleChangeStatus}>
-            <Badge
-              label={STATUS_LABELS[ticket.status] ?? ticket.status}
-              className="bg-brand/10 text-brand"
-              suffix=" ▾"
-            />
+            <View className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full ${STATUS_BADGE[ticket.status]}`}>
+              <Text className={`text-xs font-semibold ${STATUS_BADGE[ticket.status].split(" ")[1]}`}>
+                {STATUS_LABELS[ticket.status].toUpperCase()}
+              </Text>
+              <Ionicons name="chevron-down" size={10} color="currentColor" />
+            </View>
           </TouchableOpacity>
-          {ticket.requesterEmail && (
-            <Text className="text-gray-500 text-xs">{ticket.requesterEmail}</Text>
-          )}
+
+          {/* Priority */}
+          <View className={`px-2.5 py-1 rounded-full ${PRIORITY_BADGE[ticket.priority]}`}>
+            <Text className={`text-xs font-semibold ${PRIORITY_BADGE[ticket.priority].split(" ")[1]}`}>
+              {PRIORITY_LABELS[ticket.priority]}
+            </Text>
+          </View>
+
+          {/* Source */}
+          <View className="bg-dark-raised border border-dark-border px-2.5 py-1 rounded-full flex-row items-center gap-1">
+            <Ionicons name="git-branch-outline" size={10} color="#4A4A5C" />
+            <Text className="text-content-muted text-xs font-semibold">{ticket.source}</Text>
+          </View>
         </View>
+
+        {ticket.requesterEmail && (
+          <View className="flex-row items-center gap-1 mt-2.5">
+            <Ionicons name="person-outline" size={12} color="#4A4A5C" />
+            <Text className="text-content-muted text-xs">{ticket.requesterEmail}</Text>
+            <Text className="text-content-muted text-xs mx-1">·</Text>
+            <Ionicons name="time-outline" size={12} color="#4A4A5C" />
+            <Text className="text-content-muted text-xs">{timeAgo(ticket.createdAt)}</Text>
+          </View>
+        )}
       </View>
 
       {/* Messages */}
       {loadingComments ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#F96E1B" />
+          <ActivityIndicator color="#7C3AED" />
         </View>
       ) : (
         <FlatList
@@ -145,10 +168,11 @@ export default function TicketDetailScreen() {
           data={comments ?? []}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <MessageBubble comment={item} />}
-          contentContainerStyle={{ padding: 12, gap: 8 }}
+          contentContainerStyle={{ padding: 12, paddingBottom: 4 }}
           ListEmptyComponent={
-            <View className="items-center py-12">
-              <Text className="text-gray-400 text-sm">Sin mensajes todavía</Text>
+            <View className="items-center py-16">
+              <Ionicons name="chatbubble-outline" size={40} color="#2A2A3C" />
+              <Text className="text-content-muted text-sm mt-3">Sin mensajes todavía</Text>
             </View>
           }
           onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
@@ -156,27 +180,30 @@ export default function TicketDetailScreen() {
       )}
 
       {/* Reply input */}
-      <View className="bg-white border-t border-gray-200 px-4 py-3 flex-row items-end gap-3">
+      <View className="bg-dark-surface border-t border-dark-border px-3 py-3 flex-row items-end gap-2">
         <TextInput
-          className="flex-1 bg-gray-100 rounded-2xl px-4 py-3 text-gray-900 text-sm max-h-28"
+          className="flex-1 bg-dark-raised border border-dark-border rounded-2xl px-4 py-3 text-content-primary text-sm max-h-28"
           placeholder="Escribe una respuesta..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#4A4A5C"
           value={reply}
           onChangeText={setReply}
           multiline
-          returnKeyType="default"
         />
         <TouchableOpacity
           onPress={handleSend}
           disabled={!reply.trim() || addComment.isPending}
-          className={`rounded-full w-11 h-11 items-center justify-center ${
-            reply.trim() ? "bg-brand" : "bg-gray-200"
+          className={`w-11 h-11 rounded-full items-center justify-center ${
+            reply.trim() ? "bg-brand" : "bg-dark-raised"
           }`}
         >
           {addComment.isPending ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text className="text-white text-lg">↑</Text>
+            <Ionicons
+              name="send"
+              size={16}
+              color={reply.trim() ? "#fff" : "#4A4A5C"}
+            />
           )}
         </TouchableOpacity>
       </View>
@@ -190,8 +217,8 @@ function MessageBubble({ comment }: { comment: TicketComment }) {
 
   if (isSystem) {
     return (
-      <View className="items-center my-1">
-        <Text className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+      <View className="items-center my-2">
+        <Text className="text-xs text-content-muted bg-dark-raised px-3 py-1 rounded-full">
           {comment.content}
         </Text>
       </View>
@@ -199,37 +226,26 @@ function MessageBubble({ comment }: { comment: TicketComment }) {
   }
 
   return (
-    <View className={`max-w-[85%] ${isAgent ? "self-end" : "self-start"}`}>
+    <View className={`mb-3 max-w-[85%] ${isAgent ? "self-end" : "self-start"}`}>
+      {!isAgent && (
+        <View className="flex-row items-center gap-1 mb-1 ml-1">
+          <Ionicons name="mail-outline" size={10} color="#4A4A5C" />
+          <Text className="text-content-muted text-[10px]">Email</Text>
+        </View>
+      )}
       <View
         className={`rounded-2xl px-4 py-3 ${
-          isAgent ? "bg-brand rounded-tr-sm" : "bg-white rounded-tl-sm shadow-sm"
+          isAgent
+            ? "bg-brand rounded-tr-sm"
+            : "bg-dark-raised border border-dark-border rounded-tl-sm"
         }`}
       >
-        <Text className={`text-sm ${isAgent ? "text-white" : "text-gray-900"}`}>
+        <Text className={`text-sm leading-5 ${isAgent ? "text-white" : "text-content-primary"}`}>
           {comment.content}
         </Text>
       </View>
-      <Text className={`text-xs text-gray-400 mt-1 ${isAgent ? "text-right" : "text-left"}`}>
+      <Text className={`text-[10px] text-content-muted mt-1 ${isAgent ? "text-right mr-1" : "ml-1"}`}>
         {timeAgo(comment.createdAt)}
-        {!isAgent && comment.source === "EMAIL" && " · Email"}
-      </Text>
-    </View>
-  );
-}
-
-function Badge({
-  label,
-  className,
-  suffix = "",
-}: {
-  label: string;
-  className: string;
-  suffix?: string;
-}) {
-  return (
-    <View className={`px-2 py-0.5 rounded-full ${className.split(" ")[0]}`}>
-      <Text className={`text-xs font-medium ${className.split(" ")[1]}`}>
-        {label}{suffix}
       </Text>
     </View>
   );

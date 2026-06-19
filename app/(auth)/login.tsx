@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from "react-native";
 import { router } from "expo-router";
 import { login, saveTokens } from "@/api/auth.api";
@@ -32,12 +33,11 @@ export default function LoginScreen() {
     } catch (err: any) {
       let msg: string;
       if (!err.response) {
-        // Network error — can't reach the server at all
-        msg = `No se pudo conectar al servidor.\n\n${API_URL}`;
+        msg = `No se pudo conectar al servidor.\n${API_URL}`;
       } else if (err.response.status === 401 || err.response.status === 403) {
         msg = err.response.data?.message ?? "Correo o contraseña incorrectos.";
       } else {
-        msg = err.response.data?.message ?? `Error del servidor (${err.response.status}).`;
+        msg = err.response.data?.message ?? `Error ${err.response.status}`;
       }
       Alert.alert("Error al iniciar sesión", msg);
     } finally {
@@ -48,47 +48,63 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-white"
+      className="flex-1 bg-dark-bg"
     >
-      <View className="flex-1 justify-center px-8">
-        <Text className="text-3xl font-bold text-gray-900 mb-2">Control Tower</Text>
-        <Text className="text-gray-500 mb-10">Panel de soporte Comerza</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Correo electrónico</Text>
+      <View className="flex-1 justify-center px-8">
+        {/* Logo area */}
+        <View className="mb-12">
+          <View className="w-16 h-16 rounded-2xl bg-brand items-center justify-center mb-5">
+            <Text className="text-white text-2xl font-bold">CT</Text>
+          </View>
+          <Text className="text-content-primary text-3xl font-bold">Control Tower</Text>
+          <Text className="text-content-secondary mt-1">Panel de soporte · Comerza</Text>
+        </View>
+
+        {/* Email */}
+        <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider mb-2">
+          Correo electrónico
+        </Text>
         <TextInput
-          className="border border-gray-300 rounded-xl px-4 py-3 mb-4 text-gray-900"
+          className="bg-dark-surface border border-dark-border rounded-xl px-4 py-3.5 mb-4 text-content-primary"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
           placeholder="tu@comerza.com"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#4A4A5C"
         />
 
-        <Text className="text-sm font-medium text-gray-700 mb-1">Contraseña</Text>
+        {/* Password */}
+        <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider mb-2">
+          Contraseña
+        </Text>
         <TextInput
-          className="border border-gray-300 rounded-xl px-4 py-3 mb-6 text-gray-900"
+          className="bg-dark-surface border border-dark-border rounded-xl px-4 py-3.5 mb-8 text-content-primary"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           placeholder="••••••••"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#4A4A5C"
         />
 
         <TouchableOpacity
           onPress={handleLogin}
           disabled={loading}
           className="bg-brand rounded-xl py-4 items-center"
+          style={{ opacity: loading ? 0.7 : 1 }}
         >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text className="text-white font-semibold text-base">Iniciar sesión</Text>
-          }
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white font-semibold text-base">Iniciar sesión</Text>
+          )}
         </TouchableOpacity>
 
         {__DEV__ && (
-          <Text className="text-center text-gray-300 text-xs mt-6" numberOfLines={1}>
+          <Text className="text-center text-content-muted text-xs mt-8" numberOfLines={1}>
             {API_URL}
           </Text>
         )}

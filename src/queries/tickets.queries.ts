@@ -1,19 +1,36 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getTicket, getTicketComments, addComment, getTickets, updateTicketStatus } from "@/api/tickets.api";
+import {
+  getTicket,
+  getTicketComments,
+  addComment,
+  getTickets,
+  getTicketStats,
+  updateTicketStatus,
+} from "@/api/tickets.api";
 import { TicketListParams } from "@/types/ticket";
 
 export const ticketKeys = {
   all: ["tickets"] as const,
+  stats: () => [...ticketKeys.all, "stats"] as const,
   list: (params: TicketListParams) => [...ticketKeys.all, "list", params] as const,
   detail: (id: string) => [...ticketKeys.all, id] as const,
   comments: (id: string) => [...ticketKeys.all, id, "comments"] as const,
 };
 
+export function useTicketStats() {
+  return useQuery({
+    queryKey: ticketKeys.stats(),
+    queryFn: getTicketStats,
+    staleTime: 60_000,
+  });
+}
+
 export function useInfiniteTickets(params: Omit<TicketListParams, "page">) {
   return useInfiniteQuery({
     queryKey: ticketKeys.list(params),
-    queryFn: ({ pageParam = 0 }) => getTickets({ ...params, page: pageParam as number, size: 20 }),
-    getNextPageParam: (last) => last.last ? undefined : last.pageNumber + 1,
+    queryFn: ({ pageParam = 0 }) =>
+      getTickets({ ...params, page: pageParam as number, size: 20 }),
+    getNextPageParam: (last) => (last.last ? undefined : last.pageNumber + 1),
     initialPageParam: 0,
   });
 }

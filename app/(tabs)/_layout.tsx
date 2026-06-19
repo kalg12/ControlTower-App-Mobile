@@ -8,9 +8,14 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#F96E1B",
-        tabBarInactiveTintColor: "#9CA3AF",
-        tabBarStyle: { borderTopColor: "#E5E7EB" },
+        tabBarActiveTintColor: "#7C3AED",
+        tabBarInactiveTintColor: "#4A4A5C",
+        tabBarStyle: {
+          backgroundColor: "#14141E",
+          borderTopColor: "#2A2A3C",
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
         headerShown: false,
       }}
     >
@@ -35,7 +40,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Notificaciones",
+          title: "Alertas",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="notifications-outline" size={size} color={color} />
           ),

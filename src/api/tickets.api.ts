@@ -1,8 +1,13 @@
 import { apiClient } from "./client";
-import { PageResponse, Ticket, TicketComment, TicketListParams } from "@/types/ticket";
+import { PageResponse, Ticket, TicketComment, TicketListParams, TicketStats } from "@/types/ticket";
 
 export async function getTickets(params: TicketListParams): Promise<PageResponse<Ticket>> {
   const res = await apiClient.get("/api/v1/tickets", { params });
+  return res.data;
+}
+
+export async function getTicketStats(): Promise<TicketStats> {
+  const res = await apiClient.get("/api/v1/tickets/stats");
   return res.data;
 }
 
@@ -17,12 +22,15 @@ export async function getTicketComments(id: string): Promise<TicketComment[]> {
 }
 
 export async function addComment(ticketId: string, content: string): Promise<TicketComment> {
-  const res = await apiClient.post(`/api/v1/tickets/${ticketId}/comments`, { content, internal: false });
+  const res = await apiClient.post(`/api/v1/tickets/${ticketId}/comments`, {
+    content,
+    internal: false,
+  });
   return res.data;
 }
 
 export async function updateTicketStatus(id: string, status: string): Promise<Ticket> {
-  const res = await apiClient.patch(`/api/v1/tickets/${id}`, { status });
+  const res = await apiClient.patch(`/api/v1/tickets/${id}/status`, { status });
   return res.data;
 }
 
