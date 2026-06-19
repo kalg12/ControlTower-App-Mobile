@@ -8,8 +8,8 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
-import { useState, useCallback } from "react";
-import { router } from "expo-router";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteTickets, useTicketStats } from "@/queries/tickets.queries";
 import { Ticket, TicketStatus, TicketPriority } from "@/types/ticket";
@@ -23,12 +23,12 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
   CLOSED: "Cerrados",
 };
 
-const STATUS_STYLE: Record<TicketStatus, { badge: string; dot: string }> = {
-  OPEN:        { badge: "bg-blue-500/15 text-blue-400 border-blue-500/20",    dot: "bg-blue-400" },
-  IN_PROGRESS: { badge: "bg-amber-500/15 text-amber-400 border-amber-500/20", dot: "bg-amber-400" },
-  WAITING:     { badge: "bg-yellow-500/15 text-yellow-300 border-yellow-500/20", dot: "bg-yellow-300" },
-  RESOLVED:    { badge: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20", dot: "bg-emerald-400" },
-  CLOSED:      { badge: "bg-dark-raised text-content-muted border-dark-border", dot: "bg-content-muted" },
+const STATUS_BADGE: Record<TicketStatus, string> = {
+  OPEN:        "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  IN_PROGRESS: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  WAITING:     "bg-yellow-500/15 text-yellow-300 border-yellow-500/20",
+  RESOLVED:    "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  CLOSED:      "bg-dark-raised text-content-muted border-dark-border",
 };
 
 const PRIORITY_COLOR: Record<TicketPriority, string> = {
@@ -48,21 +48,41 @@ const PRIORITY_LABEL: Record<TicketPriority, string> = {
 const STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED"];
 
 export default function TicketListScreen() {
+  const {
+    initialStatus,
+    slaAtRisk,
+    assigneeId,
+  } = useLocalSearchParams<{ initialStatus?: string; slaAtRisk?: string; assigneeId?: string }>();
+
   const [search, setSearch] = useState("");
-  const [activeStatus, setActiveStatus] = useState<TicketStatus | undefined>("OPEN");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeStatus, setActiveStatus] = useState<TicketStatus | undefined>(
+    (initialStatus as TicketStatus) || "OPEN"
+  );
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Apply initialStatus when navigated from dashboard
+  useEffect(() => {
+    if (initialStatus) setActiveStatus(initialStatus as TicketStatus);
+  }, [initialStatus]);
+
+  // Debounce search → server-side query
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   const { data: statsData } = useTicketStats();
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, refetch } =
-    useInfiniteTickets({ status: activeStatus });
+    useInfiniteTickets({
+      status: activeStatus,
+      q: debouncedSearch || undefined,
+      slaAtRisk: slaAtRisk === "true" ? true : undefined,
+      assigneeId: assigneeId || undefined,
+    });
 
   const tickets = data?.pages.flatMap((p) => p.content) ?? [];
-  const filtered = search.trim()
-    ? tickets.filter(
-        (t) =>
-          t.title.toLowerCase().includes(search.toLowerCase()) ||
-          t.requesterEmail?.toLowerCase().includes(search.toLowerCase())
-      )
-    : tickets;
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
@@ -74,7 +94,17 @@ export default function TicketListScreen() {
 
       {/* Header */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-16 pb-3">
-        <Text className="text-content-primary text-xl font-bold mb-3">Tickets</Text>
+        <View className="flex-row items-center justify-between mb-3">
+          <Text className="text-content-primary text-xl font-bold">Tickets</Text>
+          {(slaAtRisk === "true" || assigneeId) && (
+            <View className="flex-row items-center gap-1.5 bg-brand/15 border border-brand/30 px-2.5 py-1 rounded-full">
+              <Ionicons name="filter" size={11} color="#A78BFA" />
+              <Text className="text-brand-light text-[10px] font-semibold">
+                {slaAtRisk === "true" ? "SLA en riesgo" : "Asignados a mí"}
+              </Text>
+            </View>
+          )}
+        </View>
         <View className="flex-row items-center bg-dark-raised rounded-xl px-3 gap-2">
           <Ionicons name="search-outline" size={16} color="#4A4A5C" />
           <TextInput
@@ -107,29 +137,15 @@ export default function TicketListScreen() {
               <TouchableOpacity
                 onPress={() => setActiveStatus(item === activeStatus ? undefined : item)}
                 className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
-                  isActive
-                    ? "bg-brand border-brand"
-                    : "bg-dark-raised border-dark-border"
+                  isActive ? "bg-brand border-brand" : "bg-dark-raised border-dark-border"
                 }`}
               >
-                <Text
-                  className={`text-xs font-semibold ${
-                    isActive ? "text-white" : "text-content-secondary"
-                  }`}
-                >
+                <Text className={`text-xs font-semibold ${isActive ? "text-white" : "text-content-secondary"}`}>
                   {STATUS_LABELS[item]}
                 </Text>
                 {count !== undefined && (
-                  <View
-                    className={`rounded-full px-1.5 py-0.5 min-w-[18px] items-center ${
-                      isActive ? "bg-white/20" : "bg-dark-border"
-                    }`}
-                  >
-                    <Text
-                      className={`text-[10px] font-bold ${
-                        isActive ? "text-white" : "text-content-secondary"
-                      }`}
-                    >
+                  <View className={`rounded-full px-1.5 py-0.5 min-w-[18px] items-center ${isActive ? "bg-white/20" : "bg-dark-border"}`}>
+                    <Text className={`text-[10px] font-bold ${isActive ? "text-white" : "text-content-secondary"}`}>
                       {count}
                     </Text>
                   </View>
@@ -142,7 +158,7 @@ export default function TicketListScreen() {
 
       {/* List */}
       <FlatList
-        data={filtered}
+        data={tickets}
         keyExtractor={(t) => t.id}
         refreshControl={
           <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#7C3AED" />
@@ -170,8 +186,7 @@ export default function TicketListScreen() {
 }
 
 function TicketCard({ ticket }: { ticket: Ticket }) {
-  const statusStyle = STATUS_STYLE[ticket.status];
-  const priorityColor = PRIORITY_COLOR[ticket.priority];
+  const badgeClasses = STATUS_BADGE[ticket.status].split(" ");
 
   return (
     <TouchableOpacity
@@ -181,42 +196,63 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
       className="mx-3 my-1.5 bg-dark-surface border border-dark-border rounded-2xl p-4"
       activeOpacity={0.7}
     >
-      {/* Row 1: priority bar + badges + time */}
+      {/* Row 1: priority dot + status + priority label + SLA breach + time */}
       <View className="flex-row items-center gap-2 mb-2.5">
-        <View className={`w-1.5 h-1.5 rounded-full ${priorityColor}`} />
-        <View className={`px-2 py-0.5 rounded-full border ${statusStyle.badge.split(" ").slice(0,3).join(" ")}`}>
-          <Text className={`text-[10px] font-bold ${statusStyle.badge.split(" ")[1]}`}>
-            {ticket.status.replace("_", " ")}
+        <View className={`w-2 h-2 rounded-full ${PRIORITY_COLOR[ticket.priority]}`} />
+
+        <View className={`px-2 py-0.5 rounded-full border ${badgeClasses.slice(0, 3).join(" ")}`}>
+          <Text className={`text-[10px] font-bold ${badgeClasses[1]}`}>
+            {STATUS_LABELS[ticket.status]}
           </Text>
         </View>
+
         <View className="bg-dark-raised border border-dark-border px-2 py-0.5 rounded-full">
           <Text className="text-[10px] font-semibold text-content-muted">
             {PRIORITY_LABEL[ticket.priority]}
           </Text>
         </View>
+
+        {ticket.slaBreached && (
+          <View className="bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded-full flex-row items-center gap-0.5">
+            <Ionicons name="warning-outline" size={9} color="#EF4444" />
+            <Text className="text-[10px] font-bold text-red-400">SLA</Text>
+          </View>
+        )}
+
         <Text className="ml-auto text-content-muted text-xs">{timeAgo(ticket.createdAt)}</Text>
       </View>
 
       {/* Title */}
-      <Text className="text-content-primary font-semibold text-sm leading-5 mb-1.5" numberOfLines={2}>
+      <Text className="text-content-primary font-semibold text-sm leading-5 mb-2" numberOfLines={2}>
         {ticket.title}
       </Text>
 
-      {/* Row 3: requester + source */}
-      <View className="flex-row items-center justify-between">
-        {ticket.requesterEmail ? (
-          <View className="flex-row items-center gap-1 flex-1">
-            <Ionicons name="person-outline" size={11} color="#4A4A5C" />
-            <Text className="text-content-muted text-xs" numberOfLines={1}>
-              {ticket.requesterEmail}
-            </Text>
+      {/* Description preview */}
+      {ticket.description ? (
+        <Text className="text-content-muted text-xs leading-4 mb-2" numberOfLines={1}>
+          {ticket.description}
+        </Text>
+      ) : null}
+
+      {/* Row 3: labels + source + comments */}
+      <View className="flex-row items-center gap-2">
+        {ticket.labels.slice(0, 2).map((l) => (
+          <View key={l} className="bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full">
+            <Text className="text-[10px] text-brand-light">{l}</Text>
           </View>
-        ) : (
-          <View />
-        )}
-        <View className="flex-row items-center gap-1">
-          <Ionicons name="git-branch-outline" size={11} color="#4A4A5C" />
-          <Text className="text-content-muted text-xs">{ticket.source}</Text>
+        ))}
+
+        <View className="ml-auto flex-row items-center gap-3">
+          {ticket.commentsCount > 0 && (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="chatbubble-outline" size={11} color="#4A4A5C" />
+              <Text className="text-content-muted text-xs">{ticket.commentsCount}</Text>
+            </View>
+          )}
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="git-branch-outline" size={11} color="#4A4A5C" />
+            <Text className="text-content-muted text-xs">{ticket.source}</Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>

@@ -5,33 +5,44 @@ export type TicketSource = "MANUAL" | "HEALTH_ALERT" | "WEBHOOK" | "EMAIL" | "PO
 export interface Ticket {
   id: string;
   tenantId: string;
+  clientId?: string;
+  branchId?: string;
   title: string;
   description?: string;
   priority: TicketPriority;
   status: TicketStatus;
   source: TicketSource;
+  sourceRefId?: string;
   assigneeId?: string;
-  requesterEmail?: string;
-  departmentId?: string;
   labels: string[];
+  commentsCount: number;
+  estimatedMinutes?: number;
+  slaDueAt?: string;
+  slaBreached?: boolean;
+  posContext?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
 }
 
 export interface TicketComment {
   id: string;
-  ticketId: string;
   authorId?: string;
+  authorName?: string;
   content: string;
   internal: boolean;
-  source: "AGENT" | "EMAIL" | "SYSTEM";
+  senderType: string;
   createdAt: string;
 }
 
 export interface TicketListParams {
   status?: TicketStatus;
   priority?: TicketPriority;
+  source?: TicketSource;
   assigneeId?: string;
+  clientId?: string;
+  slaAtRisk?: boolean;
+  q?: string;
   page?: number;
   size?: number;
 }
@@ -40,8 +51,9 @@ export interface PageResponse<T> {
   content: T[];
   totalElements: number;
   totalPages: number;
-  pageNumber: number;
-  pageSize: number;
+  page: number;
+  size: number;
+  first: boolean;
   last: boolean;
 }
 

@@ -30,7 +30,7 @@ export function useInfiniteTickets(params: Omit<TicketListParams, "page">) {
     queryKey: ticketKeys.list(params),
     queryFn: ({ pageParam = 0 }) =>
       getTickets({ ...params, page: pageParam as number, size: 20 }),
-    getNextPageParam: (last) => (last.last ? undefined : last.pageNumber + 1),
+    getNextPageParam: (last) => (last.last ? undefined : last.page + 1),
     initialPageParam: 0,
   });
 }
