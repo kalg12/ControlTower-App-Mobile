@@ -1,5 +1,21 @@
 import { apiClient } from "./client";
-import { PageResponse, Ticket, TicketComment, TicketListParams, TicketStats, CreateTicketPayload } from "@/types/ticket";
+import {
+  PageResponse,
+  Ticket,
+  TicketComment,
+  TicketListParams,
+  TicketStats,
+  CreateTicketPayload,
+  TicketStatus,
+} from "@/types/ticket";
+
+const TICKET_STATUSES: TicketStatus[] = [
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING",
+  "RESOLVED",
+  "CLOSED",
+];
 
 export async function getTickets(params: TicketListParams): Promise<PageResponse<Ticket>> {
   const res = await apiClient.get("/api/v1/tickets", { params });
@@ -7,8 +23,26 @@ export async function getTickets(params: TicketListParams): Promise<PageResponse
 }
 
 export async function getTicketStats(): Promise<TicketStats> {
-  const res = await apiClient.get("/api/v1/tickets/stats");
-  return res.data;
+  // The aggregate /tickets/stats endpoint can lag behind the ticket list.
+  // Ask the same filtered endpoint used by the list so badges and dashboard
+  // always represent the records the user can actually see.
+  const pages = await Promise.all(
+    TICKET_STATUSES.map((status) =>
+      getTickets({ status, page: 0, size: 1 })
+    )
+  );
+
+  const byStatus = Object.fromEntries(
+    TICKET_STATUSES.map((status, index) => [
+      status,
+      pages[index].totalElements,
+    ])
+  ) as Record<TicketStatus, number>;
+
+  return {
+    byStatus,
+    total: Object.values(byStatus).reduce((sum, count) => sum + count, 0),
+  };
 }
 
 export async function getTicket(id: string): Promise<Ticket> {

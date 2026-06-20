@@ -215,9 +215,8 @@ export default function DashboardScreen() {
           )}
 
           {/* ── Ticket status grid ──
-               Fuente: /api/v1/tickets/stats → byStatus tiene conteos exactos por estado.
-               dash.openTickets suma OPEN + IN_PROGRESS (todos los activos), por eso no
-               sirve para separar "Abiertos" de "En progreso" individualmente.          */}
+               Los conteos usan totalElements de la misma lista filtrada por estado
+               que muestra Tickets, para mantener ambas vistas sincronizadas.           */}
           {ticketStats && (
             <>
               <SectionHeader
