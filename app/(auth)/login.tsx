@@ -13,6 +13,7 @@ import {
 import { router } from "expo-router";
 import { login, saveTokens } from "@/api/auth.api";
 import { useAuthStore } from "@/stores/auth.store";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 
 export default function LoginScreen() {
@@ -20,6 +21,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const setUser = useAuthStore((s) => s.setUser);
+  const { barStyle, statusBarBg, placeholder } = useAppTheme();
 
   async function handleLogin() {
     if (!email.trim() || !password) return;
@@ -49,7 +51,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-dark-bg"
     >
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       <View className="flex-1 justify-center px-8">
         {/* Logo area */}
@@ -73,7 +75,7 @@ export default function LoginScreen() {
           autoCapitalize="none"
           autoComplete="email"
           placeholder="tu@comerza.com"
-          placeholderTextColor="#4A4A5C"
+          placeholderTextColor={placeholder}
         />
 
         {/* Password */}
@@ -86,7 +88,7 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           secureTextEntry
           placeholder="••••••••"
-          placeholderTextColor="#4A4A5C"
+          placeholderTextColor={placeholder}
         />
 
         <TouchableOpacity

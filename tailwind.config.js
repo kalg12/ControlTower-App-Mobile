@@ -2,6 +2,8 @@
 module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./src/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
+  // 'media' mode: dark: variants respond to Appearance.setColorScheme() via useColorScheme()
+  darkMode: "media",
   theme: {
     extend: {
       colors: {
@@ -10,18 +12,19 @@ module.exports = {
           light: "#A78BFA",
           dark: "#5B21B6",
         },
+        // These reference CSS variables defined in global.css.
+        // The rgb(.../<alpha-value>) pattern allows opacity modifiers like bg-dark-border/50.
         dark: {
-          bg: "#0C0C14",
-          surface: "#14141E",
-          raised: "#1C1C2A",
-          border: "#2A2A3C",
+          bg:      "rgb(var(--color-dark-bg) / <alpha-value>)",
+          surface: "rgb(var(--color-dark-surface) / <alpha-value>)",
+          raised:  "rgb(var(--color-dark-raised) / <alpha-value>)",
+          border:  "rgb(var(--color-dark-border) / <alpha-value>)",
         },
         content: {
-          primary: "#E8E8F2",
-          secondary: "#8888A0",
-          muted: "#4A4A5C",
+          primary:   "rgb(var(--color-content-primary) / <alpha-value>)",
+          secondary: "rgb(var(--color-content-secondary) / <alpha-value>)",
+          muted:     "rgb(var(--color-content-muted) / <alpha-value>)",
         },
-        // Keep orange for priority urgency accents
         urgent: "#F96E1B",
       },
     },

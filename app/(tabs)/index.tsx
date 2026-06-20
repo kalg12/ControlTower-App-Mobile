@@ -22,6 +22,7 @@ import { apiClient } from "@/api/client";
 import { useAuthStore } from "@/stores/auth.store";
 import { useThemeStore } from "@/stores/theme.store";
 import { useTicketStats } from "@/queries/tickets.queries";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { TicketStatus } from "@/types/ticket";
 import { timeAgo } from "@/utils/timeAgo";
 
@@ -91,6 +92,7 @@ function getHealthStyle(status: string): {
 export default function DashboardScreen() {
   const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
+  const { barStyle, statusBarBg, iconSecondary, iconMuted } = useAppTheme();
   const { data: ticketStats, isLoading: statsLoading, refetch: refetchStats } = useTicketStats();
 
   const { data: dash, isLoading: dashLoading, refetch: refetchDash } = useQuery({
@@ -142,7 +144,7 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor="#7C3AED" />
         }
       >
-        <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+        <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
         {/* ── Header ── */}
         <View className="bg-dark-surface border-b border-dark-border px-5 pt-16 pb-5">
@@ -260,12 +262,12 @@ export default function DashboardScreen() {
                 activeOpacity={0.7}
               >
                 <View className="flex-row items-center gap-2">
-                  <Ionicons name="ticket-outline" size={18} color="#8888A0" />
+                  <Ionicons name="ticket-outline" size={18} color={iconSecondary} />
                   <Text className="text-content-secondary text-sm">Total tickets</Text>
                 </View>
                 <View className="flex-row items-center gap-2">
                   <Text className="text-content-primary text-2xl font-bold">{ticketStats.total}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#4A4A5C" />
+                  <Ionicons name="chevron-forward" size={16} color={iconMuted} />
                 </View>
               </TouchableOpacity>
             </>
@@ -366,6 +368,7 @@ function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => v
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const { isDark, toggle: toggleTheme } = useThemeStore();
+  const { switchOff } = useAppTheme();
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const initials = user?.fullName?.split(" ").slice(0, 2).map((n) => n[0]).join("") ?? "?";
@@ -485,7 +488,7 @@ function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => v
             <Switch
               value={isDark}
               onValueChange={() => { toggleTheme(); Haptics.selectionAsync(); }}
-              trackColor={{ true: "#7C3AED", false: "#2A2A3C" }}
+              trackColor={{ true: "#7C3AED", false: switchOff }}
               thumbColor="#fff"
             />
           </View>
@@ -550,6 +553,7 @@ function SheetRow({
   sub: string;
   onPress: () => void;
 }) {
+  const { iconSecondary, iconMuted } = useAppTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -557,13 +561,13 @@ function SheetRow({
       activeOpacity={0.7}
     >
       <View className="w-9 h-9 rounded-xl bg-dark-raised border border-dark-border items-center justify-center mr-3">
-        <Ionicons name={icon} size={17} color="#8888A0" />
+        <Ionicons name={icon} size={17} color={iconSecondary} />
       </View>
       <View className="flex-1">
         <Text className="text-content-primary text-sm font-medium">{label}</Text>
         <Text className="text-content-muted text-xs">{sub}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={14} color="#4A4A5C" />
+      <Ionicons name="chevron-forward" size={14} color={iconMuted} />
     </TouchableOpacity>
   );
 }
@@ -641,7 +645,9 @@ function QuickAction({ icon, label, color, onPress }: {
 }
 
 function BranchHealthRow({ branch, last }: { branch: BranchHealthSummary; last: boolean }) {
-  const s = getHealthStyle(branch.status);
+  const { iconMuted: fallbackColor } = useAppTheme();
+  const rawStyle = getHealthStyle(branch.status);
+  const s = rawStyle.color === "#4A4A5C" ? { ...rawStyle, color: fallbackColor } : rawStyle;
   const lastSeen = branch.lastCheckedAt ? timeAgo(branch.lastCheckedAt) : null;
 
   return (

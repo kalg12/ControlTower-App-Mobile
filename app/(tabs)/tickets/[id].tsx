@@ -27,6 +27,7 @@ import {
 import { TicketComment, TicketStatus } from "@/types/ticket";
 import { timeAgo } from "@/utils/timeAgo";
 import { apiClient } from "@/api/client";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 const STATUS_OPTIONS: TicketStatus[] = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
 
@@ -68,6 +69,7 @@ function slaLabel(iso: string): string {
 }
 
 export default function TicketDetailScreen() {
+  const { barStyle, statusBarBg, iconMuted, iconSecondary, iconEmpty, placeholder } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [reply, setReply] = useState("");
   const [tab, setTab] = useState<"conversation" | "details">("conversation");
@@ -140,7 +142,7 @@ export default function TicketDetailScreen() {
   if (loadingTicket) {
     return (
       <View className="flex-1 bg-dark-bg items-center justify-center">
-        <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+        <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
         <ActivityIndicator color="#7C3AED" size="large" />
       </View>
     );
@@ -149,8 +151,8 @@ export default function TicketDetailScreen() {
   if (!ticket) {
     return (
       <View className="flex-1 bg-dark-bg items-center justify-center">
-        <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
-        <Ionicons name="alert-circle-outline" size={48} color="#2A2A3C" />
+        <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
+        <Ionicons name="alert-circle-outline" size={48} color={iconEmpty} />
         <Text className="text-content-secondary mt-3">Ticket no encontrado</Text>
         <TouchableOpacity onPress={() => router.back()} className="mt-4">
           <Text className="text-brand-light text-sm">Volver</Text>
@@ -173,7 +175,7 @@ export default function TicketDetailScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={0}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* ── Custom header ── */}
       <View className="bg-dark-surface border-b border-dark-border pt-14 pb-0">
@@ -185,7 +187,7 @@ export default function TicketDetailScreen() {
             className="flex-row items-center gap-1 mr-3"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="chevron-back" size={20} color="#8888A0" />
+            <Ionicons name="chevron-back" size={20} color={iconSecondary} />
             <Text className="text-content-secondary text-sm">Tickets</Text>
           </TouchableOpacity>
           <Text className="text-content-muted font-mono text-xs flex-1">#{id.slice(0, 8).toUpperCase()}</Text>
@@ -197,8 +199,8 @@ export default function TicketDetailScreen() {
               {STATUS_LABELS[ticket.status]}
             </Text>
             {updateStatus.isPending
-              ? <ActivityIndicator size={10} color="#8888A0" />
-              : <Ionicons name="chevron-down" size={11} color="#8888A0" />}
+              ? <ActivityIndicator size={10} color={iconSecondary} />
+              : <Ionicons name="chevron-down" size={11} color={iconSecondary} />}
           </TouchableOpacity>
         </View>
 
@@ -218,7 +220,7 @@ export default function TicketDetailScreen() {
           </View>
 
           <View className="bg-dark-raised border border-dark-border px-2.5 py-1 rounded-full flex-row items-center gap-1">
-            <Ionicons name="git-branch-outline" size={10} color="#4A4A5C" />
+            <Ionicons name="git-branch-outline" size={10} color={iconMuted} />
             <Text className="text-content-muted text-[10px] font-semibold">{ticket.source}</Text>
           </View>
 
@@ -240,7 +242,7 @@ export default function TicketDetailScreen() {
             </View>
           ) : ticket.slaDueAt ? (
             <View className="bg-dark-raised border border-dark-border px-2.5 py-1 rounded-full flex-row items-center gap-1">
-              <Ionicons name="timer-outline" size={10} color="#4A4A5C" />
+              <Ionicons name="timer-outline" size={10} color={iconMuted} />
               <Text className="text-[10px] text-content-muted">{slaLabel(ticket.slaDueAt)}</Text>
             </View>
           ) : null}
@@ -276,7 +278,7 @@ export default function TicketDetailScreen() {
                 <Ionicons
                   name={t === "conversation" ? "chatbubbles-outline" : "information-circle-outline"}
                   size={14}
-                  color={tab === t ? "#7C3AED" : "#4A4A5C"}
+                  color={tab === t ? "#7C3AED" : iconMuted}
                 />
                 <Text className={`text-xs font-semibold ${tab === t ? "text-brand-light" : "text-content-muted"}`}>
                   {t === "conversation"
@@ -312,7 +314,7 @@ export default function TicketDetailScreen() {
               }
               ListEmptyComponent={
                 <View className="items-center py-16">
-                  <Ionicons name="chatbubble-outline" size={40} color="#2A2A3C" />
+                  <Ionicons name="chatbubble-outline" size={40} color={iconEmpty} />
                   <Text className="text-content-muted text-sm mt-3">Sin mensajes todavía</Text>
                   <Text className="text-content-muted text-xs mt-1">
                     Escribe la primera respuesta abajo
@@ -328,7 +330,7 @@ export default function TicketDetailScreen() {
             <TextInput
               className="flex-1 bg-dark-raised border border-dark-border rounded-2xl px-4 py-3 text-content-primary text-sm max-h-28"
               placeholder="Escribe una respuesta..."
-              placeholderTextColor="#4A4A5C"
+              placeholderTextColor={placeholder}
               value={reply}
               onChangeText={setReply}
               multiline
@@ -343,7 +345,7 @@ export default function TicketDetailScreen() {
               {addComment.isPending ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Ionicons name="send" size={16} color={reply.trim() ? "#fff" : "#4A4A5C"} />
+                <Ionicons name="send" size={16} color={reply.trim() ? "#fff" : iconMuted} />
               )}
             </TouchableOpacity>
           </View>
@@ -462,6 +464,7 @@ export default function TicketDetailScreen() {
 /* ─── Sub-components ─── */
 
 function MessageBubble({ comment }: { comment: TicketComment }) {
+  const { iconMuted } = useAppTheme();
   const isAgent = comment.senderType === "AGENT";
   const isSystem = comment.senderType === "SYSTEM";
 
@@ -482,7 +485,7 @@ function MessageBubble({ comment }: { comment: TicketComment }) {
     <View className={`mb-3 max-w-[85%] ${isAgent ? "self-end" : "self-start"}`}>
       {!isAgent && comment.authorName && (
         <View className="flex-row items-center gap-1 mb-1 ml-1">
-          <Ionicons name="mail-outline" size={10} color="#4A4A5C" />
+          <Ionicons name="mail-outline" size={10} color={iconMuted} />
           <Text className="text-content-muted text-[10px]">{comment.authorName}</Text>
         </View>
       )}
@@ -521,10 +524,11 @@ function DetailSection({
   icon: keyof typeof Ionicons.glyphMap;
   children: React.ReactNode;
 }) {
+  const { iconSecondary } = useAppTheme();
   return (
     <View className="bg-dark-surface border border-dark-border rounded-2xl overflow-hidden">
       <View className="flex-row items-center gap-2 px-4 pt-4 pb-2">
-        <Ionicons name={icon} size={14} color="#8888A0" />
+        <Ionicons name={icon} size={14} color={iconSecondary} />
         <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider">
           {title}
         </Text>

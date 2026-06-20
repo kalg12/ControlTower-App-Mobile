@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import { getBoards, createBoard, deleteBoard } from "@/api/kanban.api";
 import { Board, BoardVisibility, CreateBoardPayload } from "@/types/kanban";
 import { timeAgo } from "@/utils/timeAgo";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 const BOARD_KEYS = {
   all: ["boards"] as const,
@@ -29,6 +30,7 @@ const BOARD_KEYS = {
 
 export default function KanbanBoardListScreen() {
   const qc = useQueryClient();
+  const { barStyle, statusBarBg } = useAppTheme();
   const [showCreate, setShowCreate] = useState(false);
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
@@ -63,7 +65,7 @@ export default function KanbanBoardListScreen() {
 
   return (
     <View className="flex-1 bg-dark-bg">
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* Header */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-16 pb-4">
@@ -146,6 +148,7 @@ function BoardCard({ board, onPress, onDelete }: {
   onPress: () => void;
   onDelete: () => void;
 }) {
+  const { iconMuted } = useAppTheme();
   const totalCards = board.columns.reduce((s, c) => s + c.cards.length, 0);
   const isPrivate = board.visibility === "PRIVATE";
 
@@ -178,7 +181,7 @@ function BoardCard({ board, onPress, onDelete }: {
           <Ionicons
             name={isPrivate ? "lock-closed" : "people"}
             size={9}
-            color={isPrivate ? "#4A4A5C" : "#A78BFA"}
+            color={isPrivate ? iconMuted : "#A78BFA"}
           />
           <Text className={`text-[10px] font-semibold ${isPrivate ? "text-content-muted" : "text-brand-light"}`}>
             {isPrivate ? "Privado" : "Equipo"}
@@ -213,11 +216,11 @@ function BoardCard({ board, onPress, onDelete }: {
       {/* Footer */}
       <View className="flex-row items-center mt-3 pt-3 border-t border-dark-border/50 gap-3">
         <View className="flex-row items-center gap-1">
-          <Ionicons name="square-outline" size={12} color="#4A4A5C" />
+          <Ionicons name="square-outline" size={12} color={iconMuted} />
           <Text className="text-content-muted text-xs">{board.columns.length} columnas</Text>
         </View>
         <View className="flex-row items-center gap-1">
-          <Ionicons name="card-outline" size={12} color="#4A4A5C" />
+          <Ionicons name="card-outline" size={12} color={iconMuted} />
           <Text className="text-content-muted text-xs">{totalCards} tarjetas</Text>
         </View>
         <Text className="text-content-muted text-xs ml-auto">{timeAgo(board.createdAt)}</Text>
@@ -237,6 +240,7 @@ function CreateBoardModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { placeholder, iconMuted } = useAppTheme();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<BoardVisibility>("TEAM");
@@ -295,7 +299,7 @@ function CreateBoardModal({
               <TextInput
                 className={`bg-dark-raised border rounded-xl px-4 py-3 text-content-primary text-sm mb-4 ${nameError ? "border-red-500/60" : "border-dark-border"}`}
                 placeholder="Ej. Soporte técnico, Proyectos Q3..."
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={name}
                 onChangeText={(v) => { setName(v); if (v.trim()) setNameError(false); }}
                 maxLength={100}
@@ -308,7 +312,7 @@ function CreateBoardModal({
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-5"
                 placeholder="¿Para qué sirve este tablero? (opcional)"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -336,7 +340,7 @@ function CreateBoardModal({
                     <Ionicons
                       name={v === "PRIVATE" ? "lock-closed" : "people"}
                       size={18}
-                      color={visibility === v ? "#A78BFA" : "#4A4A5C"}
+                      color={visibility === v ? "#A78BFA" : iconMuted}
                     />
                     <Text className={`text-sm font-semibold ${visibility === v ? "text-brand-light" : "text-content-muted"}`}>
                       {v === "PRIVATE" ? "Privado" : "Equipo"}

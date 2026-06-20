@@ -25,6 +25,7 @@ import {
 } from "@/queries/tickets.queries";
 import { Ticket, TicketStatus, TicketPriority, TicketSource } from "@/types/ticket";
 import { timeAgo } from "@/utils/timeAgo";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 /* ─── Constants ─── */
 
@@ -79,6 +80,7 @@ const SOURCE_LABELS: Record<TicketSource, string> = {
 /* ─── Screen ─── */
 
 export default function TicketListScreen() {
+  const { barStyle, statusBarBg, iconMuted, iconSecondary, iconEmpty, placeholder } = useAppTheme();
   const params = useLocalSearchParams<{
     initialStatus?: string;
     slaAtRisk?: string;
@@ -157,7 +159,7 @@ export default function TicketListScreen() {
 
   return (
     <View className="flex-1 bg-dark-bg">
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* ── Header ── */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-16 pb-3">
@@ -179,7 +181,7 @@ export default function TicketListScreen() {
             <Ionicons
               name="options-outline"
               size={14}
-              color={hasActiveFilters ? "#A78BFA" : "#8888A0"}
+              color={hasActiveFilters ? "#A78BFA" : iconSecondary}
             />
             <Text className={`text-xs font-semibold ${hasActiveFilters ? "text-brand-light" : "text-content-secondary"}`}>
               Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
@@ -189,11 +191,11 @@ export default function TicketListScreen() {
 
         {/* Search bar */}
         <View className="flex-row items-center bg-dark-raised rounded-xl px-3 gap-2">
-          <Ionicons name="search-outline" size={16} color="#4A4A5C" />
+          <Ionicons name="search-outline" size={16} color={iconMuted} />
           <TextInput
             className="flex-1 py-2.5 text-content-primary text-sm"
             placeholder="Buscar por asunto, descripción o email..."
-            placeholderTextColor="#4A4A5C"
+            placeholderTextColor={placeholder}
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
@@ -201,7 +203,7 @@ export default function TicketListScreen() {
           />
           {search.length > 0 && Platform.OS === "android" && (
             <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color="#4A4A5C" />
+              <Ionicons name="close-circle" size={16} color={iconMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -222,7 +224,7 @@ export default function TicketListScreen() {
                 <Text className={`text-[10px] font-semibold ${PRIORITY_BADGE_COLORS[filterPriority].split(" ")[1]}`}>
                   {PRIORITY_LABEL[filterPriority]}
                 </Text>
-                <Ionicons name="close" size={9} color="#8888A0" />
+                <Ionicons name="close" size={9} color={iconSecondary} />
               </TouchableOpacity>
             )}
             {filterSource && (
@@ -321,7 +323,7 @@ export default function TicketListScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <View className="items-center justify-center py-24">
-              <Ionicons name="ticket-outline" size={48} color="#2A2A3C" />
+              <Ionicons name="ticket-outline" size={48} color={iconEmpty} />
               <Text className="text-content-muted text-sm mt-3">
                 {search ? "Sin resultados para esa búsqueda" : "Sin tickets"}
               </Text>
@@ -375,6 +377,7 @@ export default function TicketListScreen() {
 /* ─── Ticket card ─── */
 
 function TicketCard({ ticket }: { ticket: Ticket }) {
+  const { iconMuted } = useAppTheme();
   const badgeClasses = STATUS_BADGE[ticket.status].split(" ");
 
   return (
@@ -434,12 +437,12 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
         <View className="ml-auto flex-row items-center gap-3">
           {ticket.commentsCount > 0 && (
             <View className="flex-row items-center gap-1">
-              <Ionicons name="chatbubble-outline" size={11} color="#4A4A5C" />
+              <Ionicons name="chatbubble-outline" size={11} color={iconMuted} />
               <Text className="text-content-muted text-xs">{ticket.commentsCount}</Text>
             </View>
           )}
           <View className="flex-row items-center gap-1">
-            <Ionicons name="git-branch-outline" size={11} color="#4A4A5C" />
+            <Ionicons name="git-branch-outline" size={11} color={iconMuted} />
             <Text className="text-content-muted text-xs">{ticket.source}</Text>
           </View>
         </View>
@@ -466,6 +469,7 @@ function CreateTicketModal({
   onClose: () => void;
   onCreated: (ticketId: string) => void;
 }) {
+  const { placeholder, iconMuted } = useAppTheme();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("MEDIUM");
@@ -570,7 +574,7 @@ function CreateTicketModal({
                   titleError ? "border-red-500/60" : "border-dark-border"
                 }`}
                 placeholder="¿En qué consiste el problema?"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={title}
                 onChangeText={(v) => { setTitle(v); if (v.trim()) setTitleError(false); }}
                 returnKeyType="next"
@@ -590,7 +594,7 @@ function CreateTicketModal({
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-5"
                 placeholder="Describe el problema con más detalle (opcional)"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -646,11 +650,11 @@ function CreateTicketModal({
               ) : (
                 <>
                   <View className="flex-row items-center bg-dark-raised border border-dark-border rounded-xl px-3 mb-2">
-                    <Ionicons name="search-outline" size={15} color="#4A4A5C" />
+                    <Ionicons name="search-outline" size={15} color={iconMuted} />
                     <TextInput
                       className="flex-1 py-3 px-2 text-content-primary text-sm"
                       placeholder="Buscar por nombre del cliente..."
-                      placeholderTextColor="#4A4A5C"
+                      placeholderTextColor={placeholder}
                       value={clientSearch}
                       onChangeText={setClientSearch}
                       returnKeyType="search"
@@ -659,7 +663,7 @@ function CreateTicketModal({
                     {searchingClients && <ActivityIndicator size="small" color="#7C3AED" />}
                     {clientSearch.length > 0 && !searchingClients && (
                       <TouchableOpacity onPress={() => setClientSearch("")}>
-                        <Ionicons name="close-circle" size={16} color="#4A4A5C" />
+                        <Ionicons name="close-circle" size={16} color={iconMuted} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -689,7 +693,7 @@ function CreateTicketModal({
                               <Text className="text-content-muted text-xs mt-0.5">{client.primaryEmail}</Text>
                             )}
                           </View>
-                          <Ionicons name="chevron-forward" size={14} color="#4A4A5C" />
+                          <Ionicons name="chevron-forward" size={14} color={iconMuted} />
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -697,7 +701,7 @@ function CreateTicketModal({
 
                   {debouncedClientSearch.length >= 2 && !searchingClients && (clientResults?.length ?? 0) === 0 && (
                     <View className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 mb-5 flex-row items-center gap-2">
-                      <Ionicons name="search-outline" size={14} color="#4A4A5C" />
+                      <Ionicons name="search-outline" size={14} color={iconMuted} />
                       <Text className="text-content-muted text-sm">Sin resultados para "{debouncedClientSearch}"</Text>
                     </View>
                   )}

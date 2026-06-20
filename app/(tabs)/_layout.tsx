@@ -1,18 +1,20 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function TabsLayout() {
   usePushNotifications();
+  const { tabBarBg, tabBarBorder, tabBarInactive } = useAppTheme();
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#7C3AED",
-        tabBarInactiveTintColor: "#4A4A5C",
+        tabBarInactiveTintColor: tabBarInactive,
         tabBarStyle: {
-          backgroundColor: "#14141E",
-          borderTopColor: "#2A2A3C",
+          backgroundColor: tabBarBg,
+          borderTopColor: tabBarBorder,
           borderTopWidth: 1,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },

@@ -12,10 +12,12 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useAuthStore } from "@/stores/auth.store";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 export default function SettingsScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const { barStyle, statusBarBg, iconMuted, iconSecondary } = useAppTheme();
 
   const [notifAssigned, setNotifAssigned] = useState(true);
   const [notifReply, setNotifReply] = useState(true);
@@ -43,7 +45,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView className="flex-1 bg-dark-bg">
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* Header */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-16 pb-4">
@@ -103,7 +105,7 @@ export default function SettingsScreen() {
       {/* Notification toggles */}
       <View className="mx-4 mt-4 bg-dark-surface border border-dark-border rounded-2xl overflow-hidden">
         <View className="px-5 pt-4 pb-2 flex-row items-center gap-2">
-          <Ionicons name="notifications-outline" size={16} color="#8888A0" />
+          <Ionicons name="notifications-outline" size={16} color={iconSecondary} />
           <Text className="text-content-secondary text-xs font-semibold uppercase tracking-wider">
             Notificaciones push
           </Text>
@@ -113,26 +115,29 @@ export default function SettingsScreen() {
           icon="ticket-outline"
           value={notifAssigned}
           onToggle={setNotifAssigned}
+          iconColor={iconMuted}
         />
         <ToggleRow
           label="Nuevas respuestas"
           icon="chatbubble-outline"
           value={notifReply}
           onToggle={setNotifReply}
+          iconColor={iconMuted}
         />
         <ToggleRow
           label="Alertas de SLA"
           icon="alert-circle-outline"
           value={notifSla}
           onToggle={setNotifSla}
+          iconColor={iconMuted}
           last
         />
       </View>
 
       {/* App info */}
       <View className="mx-4 mt-4 bg-dark-surface border border-dark-border rounded-2xl overflow-hidden">
-        <InfoRow icon="server-outline" label="Servidor" value={process.env.EXPO_PUBLIC_API_URL ?? "—"} />
-        <InfoRow icon="globe-outline" label="Tenant" value={user?.tenantId?.slice(0, 8) ?? "—"} last />
+        <InfoRow icon="server-outline" label="Servidor" value={process.env.EXPO_PUBLIC_API_URL ?? "—"} iconColor={iconMuted} />
+        <InfoRow icon="globe-outline" label="Tenant" value={user?.tenantId?.slice(0, 8) ?? "—"} iconColor={iconMuted} last />
       </View>
 
       {/* Logout */}
@@ -154,14 +159,17 @@ function ToggleRow({
   icon,
   value,
   onToggle,
+  iconColor,
   last = false,
 }: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   value: boolean;
   onToggle: (v: boolean) => void;
+  iconColor: string;
   last?: boolean;
 }) {
+  const { switchOff } = useAppTheme();
   return (
     <View
       className={`flex-row items-center justify-between px-5 py-3.5 ${
@@ -169,13 +177,13 @@ function ToggleRow({
       }`}
     >
       <View className="flex-row items-center gap-3 flex-1">
-        <Ionicons name={icon} size={16} color="#4A4A5C" />
+        <Ionicons name={icon} size={16} color={iconColor} />
         <Text className="text-content-primary text-sm">{label}</Text>
       </View>
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ true: "#7C3AED", false: "#2A2A3C" }}
+        trackColor={{ true: "#7C3AED", false: switchOff }}
         thumbColor="#fff"
       />
     </View>
@@ -186,11 +194,13 @@ function InfoRow({
   icon,
   label,
   value,
+  iconColor,
   last = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  iconColor: string;
   last?: boolean;
 }) {
   return (
@@ -199,7 +209,7 @@ function InfoRow({
         !last ? "border-b border-dark-border" : ""
       }`}
     >
-      <Ionicons name={icon} size={16} color="#4A4A5C" />
+      <Ionicons name={icon} size={16} color={iconColor} />
       <Text className="text-content-secondary text-sm w-20">{label}</Text>
       <Text className="text-content-muted text-xs flex-1 font-mono" numberOfLines={1}>
         {value}

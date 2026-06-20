@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import {
   getBoard,
   addColumn,
@@ -77,6 +78,7 @@ function formatDue(dueDate?: string): { label: string; overdue: boolean; soon: b
 export default function BoardDetailScreen() {
   const { boardId } = useLocalSearchParams<{ boardId: string }>();
   const qc = useQueryClient();
+  const { barStyle, statusBarBg, iconSecondary, iconMuted } = useAppTheme();
 
   const [showAddColumn, setShowAddColumn] = useState(false);
   const [createCardColumnId, setCreateCardColumnId] = useState<string | null>(null);
@@ -249,13 +251,13 @@ export default function BoardDetailScreen() {
 
   return (
     <View className="flex-1 bg-dark-bg">
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* Header */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-14 pb-3">
         <View className="flex-row items-center gap-3">
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-back" size={22} color="#8888A0" />
+            <Ionicons name="chevron-back" size={22} color={iconSecondary} />
           </TouchableOpacity>
           <View className="flex-1 min-w-0">
             <Text className="text-content-primary font-bold text-base" numberOfLines={1}>
@@ -269,7 +271,7 @@ export default function BoardDetailScreen() {
             onPress={() => { setShowAddColumn(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             className="flex-row items-center gap-1 bg-dark-raised border border-dark-border px-2.5 py-1.5 rounded-xl"
           >
-            <Ionicons name="add" size={14} color="#8888A0" />
+            <Ionicons name="add" size={14} color={iconSecondary} />
             <Text className="text-content-muted text-xs">Columna</Text>
           </TouchableOpacity>
         </View>
@@ -285,7 +287,7 @@ export default function BoardDetailScreen() {
       >
         {sortedColumns.length === 0 ? (
           <View className="items-center justify-center py-24 px-8">
-            <Ionicons name="layers-outline" size={48} color="#2A2A3C" />
+            <Ionicons name="layers-outline" size={48} color={iconMuted} />
             <Text className="text-content-primary font-bold text-base mt-4 text-center">
               Sin columnas
             </Text>
@@ -378,6 +380,7 @@ function KanbanColumnSection({
   onCardLongPress: (card: KanbanCard) => void;
   onMoveCard: (card: KanbanCard) => void;
 }) {
+  const { iconSecondary, iconMuted, iconEmpty } = useAppTheme();
   const sortedCards = [...column.cards].sort((a, b) => a.position - b.position);
 
   return (
@@ -394,7 +397,7 @@ function KanbanColumnSection({
           className="w-7 h-7 rounded-lg bg-dark-raised border border-dark-border items-center justify-center mr-1"
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
         >
-          <Ionicons name="add" size={14} color="#8888A0" />
+          <Ionicons name="add" size={14} color={iconSecondary} />
         </TouchableOpacity>
         <TouchableOpacity
           onLongPress={onDeleteColumn}
@@ -402,7 +405,7 @@ function KanbanColumnSection({
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           className="w-7 h-7 rounded-lg items-center justify-center"
         >
-          <Ionicons name="ellipsis-horizontal" size={14} color="#4A4A5C" />
+          <Ionicons name="ellipsis-horizontal" size={14} color={iconMuted} />
         </TouchableOpacity>
       </View>
 
@@ -412,7 +415,7 @@ function KanbanColumnSection({
           onPress={onAddCard}
           className="border border-dashed border-dark-border rounded-2xl py-5 items-center"
         >
-          <Ionicons name="add-circle-outline" size={20} color="#2A2A3C" />
+          <Ionicons name="add-circle-outline" size={20} color={iconEmpty} />
           <Text className="text-content-muted text-xs mt-1.5">Añadir tarjeta</Text>
         </TouchableOpacity>
       ) : (
@@ -430,7 +433,7 @@ function KanbanColumnSection({
             onPress={onAddCard}
             className="flex-row items-center gap-1.5 py-2 px-1"
           >
-            <Ionicons name="add" size={14} color="#4A4A5C" />
+            <Ionicons name="add" size={14} color={iconMuted} />
             <Text className="text-content-muted text-xs">Nueva tarjeta</Text>
           </TouchableOpacity>
         </View>
@@ -452,6 +455,7 @@ function CardItem({
   onLongPress: () => void;
   onMove: () => void;
 }) {
+  const { iconMuted } = useAppTheme();
   const p = card.priority ?? "LOW";
   const pStyle = PRIORITY_STYLE[p as CardPriority] ?? PRIORITY_STYLE.LOW;
   const due = formatDue(card.dueDate);
@@ -473,7 +477,7 @@ function CardItem({
           {card.title}
         </Text>
         <TouchableOpacity onPress={onMove} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name="arrow-forward-circle-outline" size={18} color="#4A4A5C" />
+          <Ionicons name="arrow-forward-circle-outline" size={18} color={iconMuted} />
         </TouchableOpacity>
       </View>
 
@@ -503,7 +507,7 @@ function CardItem({
               <Ionicons
                 name={checklistDone === checklistTotal ? "checkbox" : "checkbox-outline"}
                 size={11}
-                color={checklistDone === checklistTotal ? "#34D399" : "#4A4A5C"}
+                color={checklistDone === checklistTotal ? "#34D399" : iconMuted}
               />
               <Text className="text-content-muted text-xs">{checklistDone}/{checklistTotal}</Text>
             </View>
@@ -513,7 +517,7 @@ function CardItem({
               <Ionicons
                 name="calendar-outline"
                 size={11}
-                color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : "#4A4A5C"}
+                color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : iconMuted}
               />
               <Text className={`text-xs ${due.overdue ? "text-red-400 font-semibold" : due.soon ? "text-orange-400" : "text-content-muted"}`}>
                 {due.label}
@@ -534,6 +538,7 @@ function AddColumnModal({
   visible: boolean; nextPosition: number;
   onClose: () => void; onSubmit: (name: string) => void; isPending: boolean;
 }) {
+  const { placeholder } = useAppTheme();
   const [name, setName] = useState("");
 
   const presets = ["Por hacer", "En progreso", "En revisión", "Hecho", "Archivado"];
@@ -564,7 +569,7 @@ function AddColumnModal({
             <TextInput
               className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-4"
               placeholder="O escribe el nombre de la columna..."
-              placeholderTextColor="#4A4A5C"
+              placeholderTextColor={placeholder}
               value={name}
               onChangeText={setName}
               autoFocus
@@ -597,6 +602,7 @@ function CreateCardModal({
   visible: boolean; columnId: string;
   onClose: () => void; onSubmit: (p: CreateCardPayload) => void; isPending: boolean;
 }) {
+  const { placeholder } = useAppTheme();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<CardPriority>("MEDIUM");
@@ -635,14 +641,14 @@ function CreateCardModal({
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-4"
                 placeholder="¿Qué hay que hacer?"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={title} onChangeText={setTitle} autoFocus maxLength={200}
               />
               <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2">Descripción</Text>
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm mb-4"
                 placeholder="Detalles adicionales (opcional)"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={description} onChangeText={setDescription}
                 multiline numberOfLines={3} textAlignVertical="top" style={{ minHeight: 72 }}
               />
@@ -663,7 +669,7 @@ function CreateCardModal({
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm"
                 placeholder="AAAA-MM-DD (opcional)"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={dueDate} onChangeText={setDueDate}
                 keyboardType="numbers-and-punctuation"
               />
@@ -683,6 +689,7 @@ function EditCardModal({
   visible: boolean; card: KanbanCard;
   onClose: () => void; onSubmit: (p: UpdateCardPayload) => void; isPending: boolean;
 }) {
+  const { placeholder } = useAppTheme();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState<CardPriority>((card.priority as CardPriority) ?? "MEDIUM");
@@ -733,7 +740,7 @@ function EditCardModal({
               <TextInput
                 className="bg-dark-raised border border-dark-border rounded-xl px-4 py-3 text-content-primary text-sm"
                 placeholder="AAAA-MM-DD"
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={dueDate} onChangeText={setDueDate}
                 keyboardType="numbers-and-punctuation"
               />
@@ -760,6 +767,7 @@ function CardDetailModal({
   onToggleItem: (itemId: string) => void;
   onAddItem: (text: string) => void;
 }) {
+  const { iconSecondary, iconMuted, placeholder } = useAppTheme();
   const [newItemText, setNewItemText] = useState("");
   const due = formatDue(card.dueDate);
   const p = (card.priority as CardPriority) ?? "LOW";
@@ -782,13 +790,13 @@ function CardDetailModal({
 
           {/* Header */}
           <View className="flex-row items-center justify-between px-5 py-4 border-b border-dark-border">
-            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={22} color="#8888A0" /></TouchableOpacity>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={22} color={iconSecondary} /></TouchableOpacity>
             <Text className="text-content-primary font-bold" numberOfLines={1} style={{ maxWidth: "60%" }}>
               {card.title}
             </Text>
             <View className="flex-row gap-2">
               <TouchableOpacity onPress={onEdit}>
-                <Ionicons name="pencil-outline" size={18} color="#8888A0" />
+                <Ionicons name="pencil-outline" size={18} color={iconSecondary} />
               </TouchableOpacity>
               <TouchableOpacity onPress={onDelete}>
                 <Ionicons name="trash-outline" size={18} color="#EF4444" />
@@ -817,7 +825,7 @@ function CardDetailModal({
                 <View className={`flex-row items-center gap-1 px-2.5 py-1 rounded-full border ${
                   due.overdue ? "bg-red-500/15 border-red-500/30" : due.soon ? "bg-orange-500/15 border-orange-500/30" : "bg-dark-raised border-dark-border"
                 }`}>
-                  <Ionicons name="calendar-outline" size={10} color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : "#4A4A5C"} />
+                  <Ionicons name="calendar-outline" size={10} color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : iconMuted} />
                   <Text className={`text-xs ${due.overdue ? "text-red-400 font-semibold" : due.soon ? "text-orange-400" : "text-content-muted"}`}>
                     {due.label}
                   </Text>
@@ -854,11 +862,11 @@ function CardDetailModal({
 
             {/* Add checklist item */}
             <View className="flex-row items-center gap-2 mt-2 bg-dark-raised border border-dark-border rounded-xl px-3">
-              <Ionicons name="add-circle-outline" size={16} color="#4A4A5C" />
+              <Ionicons name="add-circle-outline" size={16} color={iconMuted} />
               <TextInput
                 className="flex-1 py-3 text-content-primary text-sm"
                 placeholder="Añadir elemento..."
-                placeholderTextColor="#4A4A5C"
+                placeholderTextColor={placeholder}
                 value={newItemText}
                 onChangeText={setNewItemText}
                 onSubmitEditing={submitItem}

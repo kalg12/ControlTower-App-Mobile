@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAuthStore } from "@/stores/auth.store";
 import { useThemeStore } from "@/stores/theme.store";
+import { useColorScheme } from "nativewind";
 import "../global.css";
 
 const queryClient = new QueryClient({
@@ -50,6 +51,8 @@ function AuthGuard() {
 export default function RootLayout() {
   const { hydrate, hydrated } = useAuthStore();
   const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
 
   useEffect(() => {
     hydrate();
@@ -57,11 +60,9 @@ export default function RootLayout() {
   }, []);
 
   if (!hydrated) {
-    // Mientras se leen los tokens de SecureStore mostramos un splash propio.
-    // El fondo debe ser oscuro (#0C0C14) para que no haya un "flash blanco"
-    // visible al usuario entre el splash del SO y la app real.
+    const bg = isDark ? "#0C0C14" : "#F2F2F8";
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0C0C14" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: bg }}>
         <ActivityIndicator size="large" color="#7C3AED" />
       </View>
     );

@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "@/api/client";
 import { router } from "expo-router";
 import { timeAgo } from "@/utils/timeAgo";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 interface PushNotificationItem {
   id: string;
@@ -30,6 +31,7 @@ const TYPE_ICON: Record<string, { name: keyof typeof Ionicons.glyphMap; color: s
 
 export default function NotificationsScreen() {
   const qc = useQueryClient();
+  const { barStyle, statusBarBg, iconMuted: iconM, iconEmpty } = useAppTheme();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["notifications"],
@@ -57,7 +59,7 @@ export default function NotificationsScreen() {
 
   return (
     <View className="flex-1 bg-dark-bg">
-      <StatusBar barStyle="light-content" backgroundColor="#0C0C14" />
+      <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
 
       {/* Header */}
       <View className="bg-dark-surface border-b border-dark-border px-4 pt-16 pb-4">
@@ -80,7 +82,7 @@ export default function NotificationsScreen() {
         renderItem={({ item }) => {
           const icon = TYPE_ICON[item.data.type ?? ""] ?? {
             name: "notifications-outline" as const,
-            color: "#4A4A5C",
+            color: iconM,
           };
           return (
             <TouchableOpacity
@@ -128,7 +130,7 @@ export default function NotificationsScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <View className="items-center justify-center py-24">
-              <Ionicons name="notifications-off-outline" size={48} color="#2A2A3C" />
+              <Ionicons name="notifications-off-outline" size={48} color={iconEmpty} />
               <Text className="text-content-muted text-sm mt-3">Sin notificaciones</Text>
             </View>
           ) : null

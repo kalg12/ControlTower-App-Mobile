@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Semantic color tokens — switch automatically with prefers-color-scheme */
+:root {
+  /* Light theme (default) */
+  --color-dark-bg:      242 242 248;   /* #F2F2F8 */
+  --color-dark-surface: 255 255 255;   /* #FFFFFF */
+  --color-dark-raised:  235 235 242;   /* #EBEBF2 */
+  --color-dark-border:  212 212 227;   /* #D4D4E3 */
+  --color-content-primary:   24 24 42;    /* #18182A */
+  --color-content-secondary: 82 82 122;   /* #52527A */
+  --color-content-muted:     149 149 176; /* #9595B0 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark theme */
+    --color-dark-bg:      12 12 20;    /* #0C0C14 */
+    --color-dark-surface: 20 20 30;    /* #14141E */
+    --color-dark-raised:  28 28 42;    /* #1C1C2A */
+    --color-dark-border:  42 42 60;    /* #2A2A3C */
+    --color-content-primary:   232 232 242; /* #E8E8F2 */
+    --color-content-secondary: 136 136 160; /* #8888A0 */
+    --color-content-muted:     74 74 92;    /* #4A4A5C */
+  }
+}
