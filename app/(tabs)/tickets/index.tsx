@@ -66,7 +66,15 @@ const PRIORITY_BADGE_COLORS: Record<TicketPriority, string> = {
   LOW:      "bg-dark-raised text-content-muted border-dark-border",
 };
 
-const STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED"];
+type StatusFilter = TicketStatus | "ALL";
+
+const STATUS_FILTERS: StatusFilter[] = [
+  "ALL",
+  "OPEN",
+  "IN_PROGRESS",
+  "WAITING",
+  "RESOLVED",
+];
 const PRIORITIES: TicketPriority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 const SOURCES: TicketSource[] = ["EMAIL", "MANUAL", "POS", "WEBHOOK", "HEALTH_ALERT"];
 const SOURCE_LABELS: Record<TicketSource, string> = {
@@ -90,7 +98,7 @@ export default function TicketListScreen() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeStatus, setActiveStatus] = useState<TicketStatus | undefined>(
-    (params.initialStatus as TicketStatus) || "OPEN"
+    params.initialStatus as TicketStatus | undefined
   );
   const [filterPriority, setFilterPriority] = useState<TicketPriority | undefined>();
   const [filterSource, setFilterSource] = useState<TicketSource | undefined>();
@@ -273,16 +281,17 @@ export default function TicketListScreen() {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={STATUSES}
+          data={STATUS_FILTERS}
           keyExtractor={(s) => s}
           contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}
           renderItem={({ item }) => {
-            const isActive = activeStatus === item;
-            const count = statsData?.byStatus[item];
+            const status = item === "ALL" ? undefined : item;
+            const isActive = activeStatus === status;
+            const count = item === "ALL" ? statsData?.total : statsData?.byStatus[item];
             return (
               <TouchableOpacity
                 onPress={() => {
-                  setActiveStatus(item === activeStatus ? undefined : item);
+                  setActiveStatus(status);
                   Haptics.selectionAsync();
                 }}
                 className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border ${
@@ -290,7 +299,7 @@ export default function TicketListScreen() {
                 }`}
               >
                 <Text className={`text-xs font-semibold ${isActive ? "text-white" : "text-content-secondary"}`}>
-                  {STATUS_LABELS[item]}
+                  {item === "ALL" ? "Todos" : STATUS_LABELS[item]}
                 </Text>
                 {count !== undefined && (
                   <View className={`rounded-full px-1.5 py-0.5 min-w-[18px] items-center ${isActive ? "bg-white/20" : "bg-dark-border"}`}>
@@ -825,4 +834,3 @@ function FilterModal({
     </Modal>
   );
 }
-
