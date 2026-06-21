@@ -17,6 +17,9 @@ import {
   PanResponder,
 } from "react-native";
 import { useState, useMemo, useRef } from "react";
+import * as Clipboard from "expo-clipboard";
+import { useMutation } from "@tanstack/react-query";
+import { aiAssist } from "@/api/ai.api";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -1110,6 +1113,9 @@ function CardDetailModal({
 }) {
   const { iconSecondary, iconMuted, placeholder } = useAppTheme();
   const [newItemText, setNewItemText] = useState("");
+  const [aiSheet, setAiSheet] = useState(false);
+  const [aiResult, setAiResult] = useState("");
+  const [copied, setCopied] = useState(false);
   const due = formatDue(card.dueDate);
   const p = (card.priority as CardPriority) ?? "LOW";
   const pStyle = PRIORITY_STYLE[p];
@@ -1117,6 +1123,35 @@ function CardDetailModal({
   const column = board.columns.find((c) => c.id === card.columnId);
   const assignees = users.filter((u) => card.assigneeIds?.includes(u.id));
   const cardClient = card.clientId ? clients.find((c) => c.id === card.clientId) : null;
+
+  const aiMutation = useMutation({
+    mutationFn: () =>
+      aiAssist({
+        task: "GENERATE_CARD_PROMPT",
+        context: {
+          cardTitle: card.title,
+          cardDescription: card.description ?? undefined,
+          cardChecklist: card.checklist.map((i) => i.text),
+          cardPriority: PRIORITY_LABEL[(card.priority as CardPriority) ?? "LOW"],
+          boardName: board.name,
+          clientName: cardClient?.name ?? undefined,
+        },
+      }),
+    onSuccess: (result) => {
+      setAiResult(result);
+      setAiSheet(true);
+    },
+    onError: () => {
+      Alert.alert("Error", "No se pudo generar el prompt. Inténtalo de nuevo.");
+    },
+  });
+
+  async function handleCopy() {
+    await Clipboard.setStringAsync(aiResult);
+    setCopied(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   function submitItem() {
     if (!newItemText.trim()) return;
@@ -1222,8 +1257,23 @@ function CardDetailModal({
               )}
             </View>
 
-            {/* Delete */}
-            <View className="mt-8 border-t border-dark-border/50 pt-5">
+            {/* AI Prompt Button */}
+            <View className="mt-6 border-t border-dark-border/50 pt-5">
+              <TouchableOpacity
+                onPress={() => aiMutation.mutate()}
+                disabled={aiMutation.isPending}
+                className="bg-brand/10 border border-brand/30 rounded-2xl py-3.5 flex-row items-center justify-center gap-2 mb-3">
+                {aiMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#7C3AED" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles-outline" size={16} color="#A78BFA" />
+                    <Text className="text-brand-light font-semibold text-sm">Generar prompt con IA</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Delete */}
               <TouchableOpacity onPress={onDelete} disabled={isDeleting}
                 className="bg-red-500/10 border border-red-500/30 rounded-2xl py-3.5 flex-row items-center justify-center gap-2">
                 {isDeleting ? <ActivityIndicator size="small" color="#EF4444" /> : (
@@ -1237,6 +1287,37 @@ function CardDetailModal({
           </ScrollView>
         </View>
       </Pressable>
+
+      {/* AI Result Sheet */}
+      <Modal visible={aiSheet} animationType="slide" transparent onRequestClose={() => setAiSheet(false)}>
+        <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setAiSheet(false)}>
+          <View className="bg-dark-surface border-t border-dark-border rounded-t-3xl" style={{ maxHeight: "85%" }} onStartShouldSetResponder={() => true}>
+            <DismissHandle onDismiss={() => setAiSheet(false)} />
+            <View className="flex-row items-center justify-between px-5 py-3 border-b border-dark-border">
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="sparkles" size={16} color="#A78BFA" />
+                <Text className="text-content-primary font-bold text-base">Prompt generado</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAiSheet(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={iconSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+              <View className="bg-dark-raised border border-dark-border rounded-2xl p-4 mb-4">
+                <Text className="text-content-secondary text-sm leading-6">{aiResult}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleCopy}
+                className={`rounded-2xl py-3.5 flex-row items-center justify-center gap-2 ${copied ? "bg-emerald-500/20 border border-emerald-500/40" : "bg-brand border border-brand/80"}`}>
+                <Ionicons name={copied ? "checkmark-circle" : "copy-outline"} size={16} color={copied ? "#34D399" : "#fff"} />
+                <Text className={`font-semibold text-sm ${copied ? "text-emerald-400" : "text-white"}`}>
+                  {copied ? "¡Copiado!" : "Copiar al portapapeles"}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }

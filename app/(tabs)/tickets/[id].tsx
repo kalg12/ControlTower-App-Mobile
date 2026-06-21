@@ -18,8 +18,9 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { aiAssist, QuickReplyType } from "@/api/ai.api";
 import * as ImagePicker from "expo-image-picker";
 import {
   useTicket,
@@ -110,6 +111,7 @@ export default function TicketDetailScreen() {
   const [logMinutes, setLogMinutes] = useState("");
   const [logNote, setLogNote] = useState("");
   const flatRef = useRef<FlatList>(null);
+  const [quickReplyLoading, setQuickReplyLoading] = useState<QuickReplyType | null>(null);
 
   const { data: ticket, isLoading: loadingTicket, refetch: refetchTicket, isRefetching: refetchingTicket } = useTicket(id);
   const { data: comments, isLoading: loadingComments, refetch: refetchComments, isRefetching: refetchingComments } = useTicketComments(id);
@@ -193,6 +195,42 @@ export default function TicketDetailScreen() {
     setTemplatePickerOpen(false);
     setTemplateSearch("");
     setTab("conversation");
+  }
+
+  const improveWithAi = useMutation({
+    mutationFn: (draft: string) =>
+      aiAssist({
+        task: "IMPROVE_TICKET_REPLY",
+        context: {
+          ticketSubject: ticket?.title,
+          ticketDescription: ticket?.description ?? undefined,
+          draftReply: draft,
+        },
+      }),
+    onSuccess: (improved) => {
+      setReply(improved);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: () => Alert.alert("Error", "No se pudo mejorar la respuesta. Inténtalo de nuevo."),
+  });
+
+  async function handleQuickReply(type: QuickReplyType) {
+    setQuickReplyLoading(type);
+    Haptics.selectionAsync();
+    try {
+      const result = await aiAssist({
+        task: "QUICK_REPLY",
+        context: {
+          ticketSubject: ticket?.title,
+          quickReplyType: type,
+        },
+      });
+      setReply(result);
+    } catch {
+      Alert.alert("Error", "No se pudo generar la respuesta rápida.");
+    } finally {
+      setQuickReplyLoading(null);
+    }
   }
 
   async function handlePickAttachment() {
@@ -455,6 +493,31 @@ export default function TicketDetailScreen() {
 
           {/* Reply bar */}
           <View className="bg-dark-surface border-t border-dark-border px-3 pt-2 pb-3">
+            {/* Quick reply AI chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2" contentContainerStyle={{ gap: 6, paddingRight: 4 }}>
+              {([
+                { type: "STARTED_REVIEW" as QuickReplyType, label: "Iniciando revisión" },
+                { type: "WAITING_CLIENT" as QuickReplyType, label: "Esperando cliente" },
+                { type: "NEED_INFO" as QuickReplyType, label: "Necesito info" },
+                { type: "SCHEDULE_CALL" as QuickReplyType, label: "Agendar llamada" },
+                { type: "CLOSE_TICKET" as QuickReplyType, label: "Cerrar ticket" },
+              ] as const).map(({ type, label }) => (
+                <TouchableOpacity
+                  key={type}
+                  onPress={() => handleQuickReply(type)}
+                  disabled={!!quickReplyLoading || improveWithAi.isPending}
+                  className="flex-row items-center gap-1 bg-brand/10 border border-brand/25 rounded-full px-3 py-1.5"
+                  hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                >
+                  {quickReplyLoading === type ? (
+                    <ActivityIndicator size={10} color="#A78BFA" />
+                  ) : (
+                    <Ionicons name="sparkles-outline" size={10} color="#A78BFA" />
+                  )}
+                  <Text className="text-brand-light text-[11px] font-medium">{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
             {/* Action row */}
             <View className="flex-row items-center gap-2 mb-2">
               <TouchableOpacity
@@ -478,6 +541,21 @@ export default function TicketDetailScreen() {
                 )}
                 <Text className="text-content-secondary text-[11px] font-medium">Adjuntar</Text>
               </TouchableOpacity>
+              {reply.trim().length > 0 && (
+                <TouchableOpacity
+                  onPress={() => improveWithAi.mutate(reply)}
+                  disabled={improveWithAi.isPending}
+                  className="flex-row items-center gap-1 bg-brand/10 border border-brand/30 rounded-full px-3 py-1.5"
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  {improveWithAi.isPending ? (
+                    <ActivityIndicator size={12} color="#A78BFA" />
+                  ) : (
+                    <Ionicons name="sparkles-outline" size={12} color="#A78BFA" />
+                  )}
+                  <Text className="text-brand-light text-[11px] font-medium">Mejorar</Text>
+                </TouchableOpacity>
+              )}
             </View>
             {/* Input + send */}
             <View className="flex-row items-end gap-2">

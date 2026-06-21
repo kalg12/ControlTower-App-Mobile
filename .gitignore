@@ -357,5 +357,5 @@ xcuserdata/
 expo-env.d.ts
 # @end expo-cli
 # Allow base .env with public non-secret config (API URLs)
-!.env
+.env
 !.env.local.example
