@@ -1291,34 +1291,140 @@ function CardDetailModal({
       {/* AI Result Sheet */}
       <Modal visible={aiSheet} animationType="slide" transparent onRequestClose={() => setAiSheet(false)}>
         <Pressable className="flex-1 bg-black/60 justify-end" onPress={() => setAiSheet(false)}>
-          <View className="bg-dark-surface border-t border-dark-border rounded-t-3xl" style={{ maxHeight: "85%" }} onStartShouldSetResponder={() => true}>
+          <View
+            className="bg-dark-surface border-t border-dark-border rounded-t-3xl"
+            style={{ maxHeight: "88%" }}
+            onStartShouldSetResponder={() => true}
+          >
             <DismissHandle onDismiss={() => setAiSheet(false)} />
+            {/* Header */}
             <View className="flex-row items-center justify-between px-5 py-3 border-b border-dark-border">
               <View className="flex-row items-center gap-2">
                 <Ionicons name="sparkles" size={16} color="#A78BFA" />
-                <Text className="text-content-primary font-bold text-base">Prompt generado</Text>
+                <Text className="text-content-primary font-bold text-base">Prompt generado con IA</Text>
               </View>
               <TouchableOpacity onPress={() => setAiSheet(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={22} color={iconSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-              <View className="bg-dark-raised border border-dark-border rounded-2xl p-4 mb-4">
-                <Text className="text-content-secondary text-sm leading-6">{aiResult}</Text>
-              </View>
+            {/* Scrollable markdown content */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+              showsVerticalScrollIndicator
+              indicatorStyle="white"
+            >
+              <MarkdownText text={aiResult} />
+            </ScrollView>
+            {/* Sticky action bar */}
+            <View className="border-t border-dark-border px-4 pt-3 pb-5 flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => { aiMutation.mutate(); Haptics.selectionAsync(); }}
+                disabled={aiMutation.isPending}
+                className="flex-1 bg-dark-raised border border-brand/40 rounded-2xl py-3 flex-row items-center justify-center gap-2"
+              >
+                {aiMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#A78BFA" />
+                ) : (
+                  <Ionicons name="refresh-outline" size={15} color="#A78BFA" />
+                )}
+                <Text className="text-brand-light font-semibold text-sm">Más ideas</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCopy}
-                className={`rounded-2xl py-3.5 flex-row items-center justify-center gap-2 ${copied ? "bg-emerald-500/20 border border-emerald-500/40" : "bg-brand border border-brand/80"}`}>
-                <Ionicons name={copied ? "checkmark-circle" : "copy-outline"} size={16} color={copied ? "#34D399" : "#fff"} />
+                disabled={aiMutation.isPending}
+                className={`flex-1 rounded-2xl py-3 flex-row items-center justify-center gap-2 ${
+                  copied ? "bg-emerald-500/20 border border-emerald-500/40" : "bg-brand border border-brand/60"
+                }`}
+              >
+                <Ionicons name={copied ? "checkmark-circle" : "copy-outline"} size={15} color={copied ? "#34D399" : "#fff"} />
                 <Text className={`font-semibold text-sm ${copied ? "text-emerald-400" : "text-white"}`}>
-                  {copied ? "¡Copiado!" : "Copiar al portapapeles"}
+                  {copied ? "¡Copiado!" : "Copiar"}
                 </Text>
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
         </Pressable>
       </Modal>
     </Modal>
+  );
+}
+
+/* ─── Markdown renderer ─── */
+
+function renderInline(text: string) {
+  // Split on **bold** markers
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <Text key={i} className="text-content-primary font-semibold">
+          {part.slice(2, -2)}
+        </Text>
+      );
+    }
+    return <Text key={i}>{part}</Text>;
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <View>
+      {lines.map((line, i) => {
+        if (line.startsWith("### ")) {
+          return (
+            <Text key={i} className="text-content-primary font-bold text-sm mt-4 mb-1">
+              {line.slice(4)}
+            </Text>
+          );
+        }
+        if (line.startsWith("## ")) {
+          return (
+            <Text key={i} className="text-brand-light font-bold text-base mt-5 mb-1.5">
+              {line.slice(3)}
+            </Text>
+          );
+        }
+        if (line.startsWith("# ")) {
+          return (
+            <Text key={i} className="text-brand-light font-bold text-lg mt-5 mb-2">
+              {line.slice(2)}
+            </Text>
+          );
+        }
+        const numMatch = line.match(/^(\d+)\.\s(.+)/);
+        if (numMatch) {
+          return (
+            <View key={i} className="flex-row gap-2 mt-1.5 pl-1">
+              <Text className="text-brand-light font-bold text-sm w-5 shrink-0">{numMatch[1]}.</Text>
+              <Text className="flex-1 text-content-secondary text-sm leading-5">{renderInline(numMatch[2])}</Text>
+            </View>
+          );
+        }
+        if (line.match(/^[-*]\s/)) {
+          return (
+            <View key={i} className="flex-row gap-2 mt-1.5 pl-1">
+              <Text className="text-brand-light text-sm font-bold w-4 shrink-0">•</Text>
+              <Text className="flex-1 text-content-secondary text-sm leading-5">{renderInline(line.slice(2))}</Text>
+            </View>
+          );
+        }
+        if (!line.trim()) return <View key={i} className="h-3" />;
+        if (line.startsWith("**") && line.endsWith("**") && line.length > 4) {
+          return (
+            <Text key={i} className="text-content-primary font-semibold text-sm mt-3">
+              {line.slice(2, -2)}
+            </Text>
+          );
+        }
+        return (
+          <Text key={i} className="text-content-secondary text-sm leading-5">
+            {renderInline(line)}
+          </Text>
+        );
+      })}
+    </View>
   );
 }
 
