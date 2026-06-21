@@ -80,6 +80,7 @@ export interface UpdateCardPayload {
   dueDate?: string;
   priority: CardPriority;
   estimatedMinutes?: number;
+  clientId?: string;
 }
 
 export interface MoveCardPayload {

@@ -84,13 +84,22 @@ export async function toggleChecklistItem(itemId: string): Promise<ChecklistItem
 }
 
 export async function getTenantUsers(): Promise<
-  { id: string; fullName: string; email: string }[]
+  { id: string; fullName: string; email: string; avatarUrl?: string }[]
 > {
   const res = await apiClient.get("/api/v1/users", { params: { size: 100 } });
   const content = res.data?.content ?? res.data ?? [];
-  return content.map((u: { id: string; fullName: string; email: string }) => ({
+  return content.map((u: { id: string; fullName: string; email: string; avatarUrl?: string }) => ({
     id: u.id,
     fullName: u.fullName,
     email: u.email,
+    avatarUrl: u.avatarUrl,
   }));
+}
+
+export async function getClients(q?: string): Promise<{ id: string; name: string }[]> {
+  const res = await apiClient.get("/api/v1/clients", {
+    params: { q, size: 50, page: 0 },
+  });
+  const content = res.data?.content ?? res.data ?? [];
+  return content.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }));
 }
