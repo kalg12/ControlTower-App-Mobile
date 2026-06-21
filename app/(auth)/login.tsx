@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const setUser = useAuthStore((s) => s.setUser);
   const { barStyle, statusBarBg, placeholder } = useAppTheme();
+  const passwordRef = useRef<TextInput>(null);
 
   async function handleLogin() {
     if (!email.trim() || !password) return;
@@ -76,6 +77,9 @@ export default function LoginScreen() {
           autoComplete="email"
           placeholder="tu@comerza.com"
           placeholderTextColor={placeholder}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
         />
 
         {/* Password */}
@@ -83,12 +87,15 @@ export default function LoginScreen() {
           Contraseña
         </Text>
         <TextInput
+          ref={passwordRef}
           className="bg-dark-surface border border-dark-border rounded-xl px-4 py-3.5 mb-8 text-content-primary"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           placeholder="••••••••"
           placeholderTextColor={placeholder}
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
         />
 
         <TouchableOpacity

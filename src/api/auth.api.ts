@@ -83,30 +83,31 @@ export async function hydrateUser(): Promise<AuthUser | null> {
     ]);
     if (!token || !userJson) return null;
 
-    // ¿Por qué no usamos Buffer.from()?
-    // Buffer es una API de Node.js. React Native corre sobre el motor JavaScript
-    // Hermes (o JavaScriptCore), NO sobre Node.js, así que Buffer no existe.
-    // Usamos atob(), que sí está disponible globalmente en React Native 0.70+.
-    //
-    // Un JWT tiene 3 partes separadas por puntos: header.payload.signature
-    // El payload está en base64url (variante de base64 que usa - en vez de + y _ en vez de /)
-    // Necesitamos convertirlo a base64 estándar antes de decodificarlo.
-    const base64url = token.split(".")[1];
-    const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-    // base64 debe ser múltiplo de 4 caracteres; añadimos padding si falta
-    const padded = base64 + "==".slice((base64.length + 3) % 4);
-    const payload = JSON.parse(atob(padded)) as { exp: number };
+    // Check expiry by decoding the JWT payload. If decode fails for any reason
+    // (Hermes atob quirks on Android, malformed token, etc.) we fall through to
+    // refresh rather than crashing or silently logging the user out.
+    let isExpired = false;
+    try {
+      const base64url = token.split(".")[1];
+      const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+      // "=".repeat(...) produces correct padding for all cases; the prior
+      // "==".slice(n) idiom was wrong for length%4===2 (produces "=" instead of "=="),
+      // which Hermes on Android enforces strictly causing a silent catch → logout.
+      const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+      const payload = JSON.parse(atob(padded)) as { exp: number };
+      isExpired = Date.now() >= payload.exp * 1000;
+    } catch {
+      // Can't decode — assume expired and try refresh
+      isExpired = true;
+    }
 
-    if (Date.now() >= payload.exp * 1000) {
-      // El accessToken venció — intentamos renovarlo silenciosamente con el refreshToken.
-      // El usuario NO nota nada; la app sigue funcionando sin pedirle login.
+    if (isExpired) {
       const newToken = await tryRefreshToken();
-      if (!newToken) return null; // refreshToken también venció → hay que hacer login
+      if (!newToken) return null;
     }
 
     return JSON.parse(userJson) as AuthUser;
   } catch {
-    // Si algo falla (JWT malformado, SecureStore corrupto, etc.) tratamos como sesión inválida.
     return null;
   }
 }

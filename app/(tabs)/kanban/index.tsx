@@ -149,7 +149,7 @@ function BoardCard({ board, onPress, onDelete }: {
   onDelete: () => void;
 }) {
   const { iconMuted } = useAppTheme();
-  const totalCards = board.columns.reduce((s, c) => s + c.cards.length, 0);
+  const totalCards = (board.columns ?? []).reduce((s, c) => s + (c.cards?.length ?? 0), 0);
   const isPrivate = board.visibility === "PRIVATE";
 
   return (
@@ -190,22 +190,22 @@ function BoardCard({ board, onPress, onDelete }: {
       </View>
 
       {/* Columns preview */}
-      {board.columns.length > 0 && (
+      {(board.columns?.length ?? 0) > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           className="mt-3"
           contentContainerStyle={{ gap: 6 }}
         >
-          {board.columns.map((col) => (
+          {board.columns!.map((col) => (
             <View
               key={col.id}
               className="bg-dark-raised border border-dark-border rounded-lg px-2.5 py-1.5 flex-row items-center gap-1.5"
             >
               <Text className="text-content-secondary text-xs font-medium">{col.name}</Text>
-              {col.cards.length > 0 && (
+              {(col.cards?.length ?? 0) > 0 && (
                 <View className="bg-brand/20 rounded-full w-4 h-4 items-center justify-center">
-                  <Text className="text-brand-light text-[9px] font-bold">{col.cards.length}</Text>
+                  <Text className="text-brand-light text-[9px] font-bold">{col.cards!.length}</Text>
                 </View>
               )}
             </View>
@@ -217,7 +217,7 @@ function BoardCard({ board, onPress, onDelete }: {
       <View className="flex-row items-center mt-3 pt-3 border-t border-dark-border/50 gap-3">
         <View className="flex-row items-center gap-1">
           <Ionicons name="square-outline" size={12} color={iconMuted} />
-          <Text className="text-content-muted text-xs">{board.columns.length} columnas</Text>
+          <Text className="text-content-muted text-xs">{board.columns?.length ?? 0} columnas</Text>
         </View>
         <View className="flex-row items-center gap-1">
           <Ionicons name="card-outline" size={12} color={iconMuted} />
