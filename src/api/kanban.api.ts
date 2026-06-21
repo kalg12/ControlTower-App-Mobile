@@ -96,6 +96,30 @@ export async function getTenantUsers(): Promise<
   }));
 }
 
+export interface WorkItem {
+  id: string;
+  card: KanbanCard & { clientId?: string | null };
+  boardId: string;
+  boardName: string;
+  columnId: string;
+  columnName: string;
+  columnKind?: string | null;
+  tenantId?: string;
+  tenantName?: string;
+  assigneeNames: string[];
+  checklistProgress?: string;
+  overdue: boolean;
+}
+
+export async function getWorkItems(params?: {
+  boardId?: string;
+  assigneeId?: string;
+  columnKind?: string;
+}): Promise<WorkItem[]> {
+  const res = await apiClient.get("/api/v1/kanban/work-items", { params });
+  return res.data ?? [];
+}
+
 export async function getClients(q?: string): Promise<{ id: string; name: string }[]> {
   const res = await apiClient.get("/api/v1/clients", {
     params: { q, size: 50, page: 0 },

@@ -78,13 +78,22 @@ export default function KanbanBoardListScreen() {
               </Text>
             )}
           </View>
-          <TouchableOpacity
-            onPress={() => { setShowCreate(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
-            className="flex-row items-center gap-1.5 bg-brand px-3 py-2 rounded-xl"
-          >
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text className="text-white text-sm font-semibold">Nuevo tablero</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)/kanban/work")}
+              className="flex-row items-center gap-1.5 bg-dark-raised border border-brand/40 px-3 py-2 rounded-xl"
+            >
+              <Ionicons name="layers-outline" size={15} color="#A78BFA" />
+              <Text className="text-brand-light text-sm font-semibold">Todas</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { setShowCreate(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+              className="flex-row items-center gap-1.5 bg-brand px-3 py-2 rounded-xl"
+            >
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text className="text-white text-sm font-semibold">Nuevo</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
