@@ -15,6 +15,7 @@ import {
   Platform,
   ActionSheetIOS,
   PanResponder,
+  Animated,
 } from "react-native";
 import { useState, useMemo, useRef } from "react";
 import * as Clipboard from "expo-clipboard";
@@ -50,6 +51,8 @@ import {
 } from "@/types/kanban";
 
 /* ─── Constants ─── */
+
+const SWIPE_THRESHOLD = 90;
 
 const PRIORITY_STYLE: Record<CardPriority, { dot: string; text: string; badge: string }> = {
   LOW:      { dot: "bg-content-muted",  text: "text-content-muted",  badge: "bg-dark-raised border-dark-border" },
@@ -550,6 +553,11 @@ export default function BoardDetailScreen() {
     }
   }
 
+  function handleMoveCardToColumn(card: KanbanCard, targetColumnId: string) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    moveCardMutation.mutate({ cardId: card.id, targetColumnId });
+  }
+
   function confirmDeleteCard(card: KanbanCard) {
     Alert.alert(`Eliminar "${card.title}"`, "Esta acción no se puede deshacer.", [
       { text: "Cancelar", style: "cancel" },
@@ -592,6 +600,9 @@ export default function BoardDetailScreen() {
 
   const sortedColumns = [...board.columns].sort((a, b) => a.position - b.position);
   const totalCards = board.columns.reduce((s, c) => s + c.cards.length, 0);
+  const currentColIdx = sortedColumns.findIndex((c) => c.id === liveViewCard?.columnId);
+  const nextCol = currentColIdx >= 0 && currentColIdx < sortedColumns.length - 1 ? sortedColumns[currentColIdx + 1] : undefined;
+  const prevCol = currentColIdx >= 0 && currentColIdx > 0 ? sortedColumns[currentColIdx - 1] : undefined;
 
   return (
     <View className="flex-1 bg-dark-bg">
@@ -638,16 +649,19 @@ export default function BoardDetailScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          sortedColumns.map((col) => (
+          sortedColumns.map((col, idx) => (
             <KanbanColumnSection
               key={col.id}
               column={col}
+              nextColumn={sortedColumns[idx + 1]}
+              prevColumn={sortedColumns[idx - 1]}
               users={users}
               clients={clients}
               onAddCard={() => setCreateCardColumnId(col.id)}
               onDeleteColumn={() => confirmDeleteColumn(col)}
               onCardPress={(card) => setViewCard(card)}
               onMoveCard={(card) => handleMoveCard(card)}
+              onMoveCardToColumn={handleMoveCardToColumn}
             />
           ))
         )}
@@ -702,9 +716,13 @@ export default function BoardDetailScreen() {
           board={board}
           users={users}
           clients={clients}
+          nextColumn={nextCol}
+          prevColumn={prevCol}
           onClose={() => setViewCard(null)}
           onEdit={() => { setViewCard(null); setEditCard(liveViewCard); }}
           onMove={() => handleMoveCard(liveViewCard)}
+          onMoveToNext={nextCol ? () => { handleMoveCardToColumn(liveViewCard, nextCol.id); setViewCard(null); } : undefined}
+          onMoveToPrev={prevCol ? () => { handleMoveCardToColumn(liveViewCard, prevCol.id); setViewCard(null); } : undefined}
           onDelete={() => confirmDeleteCard(liveViewCard)}
           onToggleItem={(id) => toggleItemMutation.mutate(id)}
           onAddItem={(text) => addItemMutation.mutate({ cardId: liveViewCard.id, text })}
@@ -718,15 +736,18 @@ export default function BoardDetailScreen() {
 /* ─── Column section ─── */
 
 function KanbanColumnSection({
-  column, users, clients, onAddCard, onDeleteColumn, onCardPress, onMoveCard,
+  column, nextColumn, prevColumn, users, clients, onAddCard, onDeleteColumn, onCardPress, onMoveCard, onMoveCardToColumn,
 }: {
   column: KanbanColumn;
+  nextColumn?: KanbanColumn;
+  prevColumn?: KanbanColumn;
   users: TenantUser[];
   clients: ClientOption[];
   onAddCard: () => void;
   onDeleteColumn: () => void;
   onCardPress: (card: KanbanCard) => void;
   onMoveCard: (card: KanbanCard) => void;
+  onMoveCardToColumn: (card: KanbanCard, targetColumnId: string) => void;
 }) {
   const { iconSecondary, iconMuted, iconEmpty } = useAppTheme();
   const sortedCards = [...column.cards].sort((a, b) => a.position - b.position);
@@ -755,7 +776,18 @@ function KanbanColumnSection({
       ) : (
         <View className="gap-2">
           {sortedCards.map((card) => (
-            <CardItem key={card.id} card={card} users={users} clients={clients} onPress={() => onCardPress(card)} onMove={() => onMoveCard(card)} />
+            <CardItem
+              key={card.id}
+              card={card}
+              users={users}
+              clients={clients}
+              nextColumn={nextColumn}
+              prevColumn={prevColumn}
+              onPress={() => onCardPress(card)}
+              onMove={() => onMoveCard(card)}
+              onMoveToNext={nextColumn ? () => onMoveCardToColumn(card, nextColumn.id) : undefined}
+              onMoveToPrev={prevColumn ? () => onMoveCardToColumn(card, prevColumn.id) : undefined}
+            />
           ))}
           <TouchableOpacity onPress={onAddCard} className="flex-row items-center gap-1.5 py-2 px-1">
             <Ionicons name="add" size={14} color={iconMuted} />
@@ -767,16 +799,83 @@ function KanbanColumnSection({
   );
 }
 
-/* ─── Card item ─── */
+/* ─── Card item (swipeable) ─── */
 
-function CardItem({ card, users, clients, onPress, onMove }: {
+function CardItem({ card, users, clients, nextColumn, prevColumn, onPress, onMove, onMoveToNext, onMoveToPrev }: {
   card: KanbanCard;
   users: TenantUser[];
   clients: ClientOption[];
+  nextColumn?: KanbanColumn;
+  prevColumn?: KanbanColumn;
   onPress: () => void;
   onMove: () => void;
+  onMoveToNext?: () => void;
+  onMoveToPrev?: () => void;
 }) {
   const { iconMuted } = useAppTheme();
+  const translateX = useRef(new Animated.Value(0)).current;
+  const thresholdHit = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => {
+        if (Math.abs(gs.dx) < 8 || Math.abs(gs.dx) < Math.abs(gs.dy) * 1.2) return false;
+        if (gs.dx > 0 && !nextColumn) return false;
+        if (gs.dx < 0 && !prevColumn) return false;
+        return true;
+      },
+      onPanResponderGrant: () => {
+        thresholdHit.current = false;
+      },
+      onPanResponderMove: (_, gs) => {
+        let dx = gs.dx;
+        if (dx > 0 && !nextColumn) return;
+        if (dx < 0 && !prevColumn) return;
+        // Add rubber-band resistance past threshold
+        if (Math.abs(dx) > SWIPE_THRESHOLD) {
+          const excess = Math.abs(dx) - SWIPE_THRESHOLD;
+          dx = (dx > 0 ? 1 : -1) * (SWIPE_THRESHOLD + excess * 0.25);
+        }
+        translateX.setValue(dx);
+        if (!thresholdHit.current && Math.abs(gs.dx) >= SWIPE_THRESHOLD) {
+          thresholdHit.current = true;
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx >= SWIPE_THRESHOLD && nextColumn && onMoveToNext) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Animated.timing(translateX, { toValue: 380, duration: 200, useNativeDriver: false }).start(() => {
+            translateX.setValue(0);
+            onMoveToNext();
+          });
+        } else if (gs.dx <= -SWIPE_THRESHOLD && prevColumn && onMoveToPrev) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Animated.timing(translateX, { toValue: -380, duration: 200, useNativeDriver: false }).start(() => {
+            translateX.setValue(0);
+            onMoveToPrev();
+          });
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: false, bounciness: 12, speed: 14 }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: false }).start();
+      },
+    })
+  ).current;
+
+  const nextBgOpacity = translateX.interpolate({
+    inputRange: [0, 16, SWIPE_THRESHOLD],
+    outputRange: [0, 0.55, 1],
+    extrapolate: "clamp",
+  });
+  const prevBgOpacity = translateX.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, -16, 0],
+    outputRange: [1, 0.55, 0],
+    extrapolate: "clamp",
+  });
+
   const p = (card.priority as CardPriority) ?? "LOW";
   const pStyle = PRIORITY_STYLE[p] ?? PRIORITY_STYLE.LOW;
   const due = formatDue(card.dueDate);
@@ -786,63 +885,111 @@ function CardItem({ card, users, clients, onPress, onMove }: {
   const assignees = users.filter((u) => card.assigneeIds?.includes(u.id));
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75} className="bg-dark-surface border border-dark-border rounded-2xl p-3.5">
-      <View className="flex-row items-start gap-2">
-        <View className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${pStyle.dot}`} />
-        <Text className="text-content-primary text-sm font-semibold flex-1 leading-5" numberOfLines={2}>{card.title}</Text>
-        <TouchableOpacity onPress={onMove} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name="arrow-forward-circle-outline" size={18} color={iconMuted} />
-        </TouchableOpacity>
-      </View>
+    <View style={{ position: "relative" }}>
+      {/* Swipe-right action: move to next column */}
+      {nextColumn && (
+        <Animated.View
+          style={{
+            position: "absolute", top: 0, bottom: 0, left: 0, right: 0,
+            backgroundColor: "#059669", borderRadius: 16,
+            justifyContent: "center", paddingLeft: 20,
+            opacity: nextBgOpacity,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="arrow-forward-circle" size={22} color="rgba(255,255,255,0.95)" />
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13, maxWidth: 180 }} numberOfLines={1}>
+              {nextColumn.name}
+            </Text>
+          </View>
+        </Animated.View>
+      )}
+      {/* Swipe-left action: move to prev column */}
+      {prevColumn && (
+        <Animated.View
+          style={{
+            position: "absolute", top: 0, bottom: 0, left: 0, right: 0,
+            backgroundColor: "#D97706", borderRadius: 16,
+            alignItems: "flex-end", justifyContent: "center", paddingRight: 20,
+            opacity: prevBgOpacity,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13, maxWidth: 180 }} numberOfLines={1}>
+              {prevColumn.name}
+            </Text>
+            <Ionicons name="arrow-back-circle" size={22} color="rgba(255,255,255,0.95)" />
+          </View>
+        </Animated.View>
+      )}
 
-      {card.description ? (
-        <Text className="text-content-muted text-xs mt-1.5 ml-3.5 leading-4" numberOfLines={1}>{card.description}</Text>
-      ) : null}
+      {/* Card — slides with finger */}
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.78} className="bg-dark-surface border border-dark-border rounded-2xl p-3.5">
+          <View className="flex-row items-start gap-2">
+            <View className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${pStyle.dot}`} />
+            <Text className="text-content-primary text-sm font-semibold flex-1 leading-5" numberOfLines={2}>{card.title}</Text>
+            <TouchableOpacity onPress={(e) => { e.stopPropagation(); onMove(); }} hitSlop={{ top: 6, bottom: 6, left: 10, right: 6 }}>
+              <Ionicons name="ellipsis-horizontal-circle-outline" size={18} color={iconMuted} />
+            </TouchableOpacity>
+          </View>
 
-      {card.labels?.length > 0 && (
-        <View className="flex-row flex-wrap gap-1 mt-2 ml-3.5">
-          {card.labels.slice(0, 3).map((l) => (
-            <View key={l} className="bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full">
-              <Text className="text-[10px] text-brand-light">{l}</Text>
+          {card.description ? (
+            <Text className="text-content-muted text-xs mt-1.5 ml-3.5 leading-4" numberOfLines={1}>{card.description}</Text>
+          ) : null}
+
+          {card.labels?.length > 0 && (
+            <View className="flex-row flex-wrap gap-1 mt-2 ml-3.5">
+              {card.labels.slice(0, 3).map((l) => (
+                <View key={l} className="bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full">
+                  <Text className="text-[10px] text-brand-light">{l}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      )}
+          )}
 
-      {/* Client chip */}
-      {cardClient && (
-        <View className="flex-row items-center gap-1 mt-1.5 ml-3.5">
-          <Ionicons name="business-outline" size={11} color="#7C3AED" />
-          <Text className="text-brand-light text-[11px] font-medium" numberOfLines={1}>{cardClient.name}</Text>
-        </View>
-      )}
+          {cardClient && (
+            <View className="flex-row items-center gap-1 mt-1.5 ml-3.5">
+              <Ionicons name="business-outline" size={11} color="#7C3AED" />
+              <Text className="text-brand-light text-[11px] font-medium" numberOfLines={1}>{cardClient.name}</Text>
+            </View>
+          )}
 
-      {/* Footer: assignees + checklist + due */}
-      <View className="flex-row items-center mt-2.5 ml-3.5 gap-3">
-        {assignees.length > 0 && (
-          <View className="flex-row gap-0.5">
-            {assignees.slice(0, 3).map((u) => <UserBubble key={u.id} user={u} size={6} />)}
-            {assignees.length > 3 && (
-              <View className="w-6 h-6 rounded-full bg-dark-raised border border-dark-border items-center justify-center">
-                <Text className="text-content-muted text-[9px]">+{assignees.length - 3}</Text>
+          <View className="flex-row items-center mt-2.5 ml-3.5 gap-3">
+            {assignees.length > 0 && (
+              <View className="flex-row gap-0.5">
+                {assignees.slice(0, 3).map((u) => <UserBubble key={u.id} user={u} size={6} />)}
+                {assignees.length > 3 && (
+                  <View className="w-6 h-6 rounded-full bg-dark-raised border border-dark-border items-center justify-center">
+                    <Text className="text-content-muted text-[9px]">+{assignees.length - 3}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+            {checklistTotal > 0 && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name={checklistDone === checklistTotal ? "checkbox" : "checkbox-outline"} size={11} color={checklistDone === checklistTotal ? "#34D399" : iconMuted} />
+                <Text className="text-content-muted text-xs">{checklistDone}/{checklistTotal}</Text>
+              </View>
+            )}
+            {due.label && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="calendar-outline" size={11} color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : iconMuted} />
+                <Text className={`text-xs ${due.overdue ? "text-red-400 font-semibold" : due.soon ? "text-orange-400" : "text-content-muted"}`}>{due.label}</Text>
+              </View>
+            )}
+            {/* Swipe hint — only show if card has adjacent columns */}
+            {(nextColumn || prevColumn) && (
+              <View className="ml-auto flex-row items-center gap-0.5 opacity-30">
+                {prevColumn && <Ionicons name="chevron-back" size={9} color={iconMuted} />}
+                <Ionicons name="swap-horizontal-outline" size={10} color={iconMuted} />
+                {nextColumn && <Ionicons name="chevron-forward" size={9} color={iconMuted} />}
               </View>
             )}
           </View>
-        )}
-        {checklistTotal > 0 && (
-          <View className="flex-row items-center gap-1">
-            <Ionicons name={checklistDone === checklistTotal ? "checkbox" : "checkbox-outline"} size={11} color={checklistDone === checklistTotal ? "#34D399" : iconMuted} />
-            <Text className="text-content-muted text-xs">{checklistDone}/{checklistTotal}</Text>
-          </View>
-        )}
-        {due.label && (
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="calendar-outline" size={11} color={due.overdue ? "#EF4444" : due.soon ? "#F97316" : iconMuted} />
-            <Text className={`text-xs ${due.overdue ? "text-red-400 font-semibold" : due.soon ? "text-orange-400" : "text-content-muted"}`}>{due.label}</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -1105,10 +1252,14 @@ function EditCardModal({ visible, card, users, clients, onClose, onSubmit, isPen
 /* ─── Card detail modal ─── */
 
 function CardDetailModal({
-  visible, card, board, users, clients, onClose, onEdit, onMove, onDelete, onToggleItem, onAddItem, isDeleting,
+  visible, card, board, users, clients, nextColumn, prevColumn,
+  onClose, onEdit, onMove, onMoveToNext, onMoveToPrev, onDelete, onToggleItem, onAddItem, isDeleting,
 }: {
   visible: boolean; card: KanbanCard; board: Board; users: TenantUser[]; clients: ClientOption[];
-  onClose: () => void; onEdit: () => void; onMove: () => void; onDelete: () => void;
+  nextColumn?: KanbanColumn; prevColumn?: KanbanColumn;
+  onClose: () => void; onEdit: () => void; onMove: () => void;
+  onMoveToNext?: () => void; onMoveToPrev?: () => void;
+  onDelete: () => void;
   onToggleItem: (id: string) => void; onAddItem: (text: string) => void; isDeleting: boolean;
 }) {
   const { iconSecondary, iconMuted, placeholder } = useAppTheme();
@@ -1204,6 +1355,40 @@ function CardDetailModal({
                 </View>
               )}
             </View>
+
+            {/* Stage navigation */}
+            {(prevColumn || nextColumn) && (
+              <View className="mb-5">
+                <Text className="text-content-muted text-xs font-semibold uppercase tracking-wider mb-2.5">Mover a etapa</Text>
+                <View className="flex-row gap-2.5">
+                  {prevColumn ? (
+                    <TouchableOpacity
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onMoveToPrev?.(); }}
+                      className="flex-1 flex-row items-center gap-2 bg-amber-500/10 border border-amber-500/35 rounded-2xl px-3 py-3"
+                    >
+                      <Ionicons name="arrow-back-circle-outline" size={18} color="#F59E0B" />
+                      <Text className="text-amber-400 text-xs font-bold flex-1" numberOfLines={1}>{prevColumn.name}</Text>
+                    </TouchableOpacity>
+                  ) : <View className="flex-1" />}
+                  {nextColumn ? (
+                    <TouchableOpacity
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onMoveToNext?.(); }}
+                      className="flex-1 flex-row items-center justify-end gap-2 bg-emerald-500/10 border border-emerald-500/35 rounded-2xl px-3 py-3"
+                    >
+                      <Text className="text-emerald-400 text-xs font-bold flex-1 text-right" numberOfLines={1}>{nextColumn.name}</Text>
+                      <Ionicons name="arrow-forward-circle-outline" size={18} color="#34D399" />
+                    </TouchableOpacity>
+                  ) : <View className="flex-1" />}
+                </View>
+                <TouchableOpacity
+                  onPress={onMove}
+                  className="mt-2 flex-row items-center justify-center gap-1.5 py-2"
+                >
+                  <Ionicons name="swap-horizontal-outline" size={13} color="#6B7280" />
+                  <Text className="text-content-muted text-xs">Ver todas las etapas</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Assignees */}
             {assignees.length > 0 && (
