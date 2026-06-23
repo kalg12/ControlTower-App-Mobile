@@ -10,8 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Animated,
 } from "react-native";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -119,6 +120,7 @@ export default function DashboardScreen() {
   });
 
   const isLoading = statsLoading || dashLoading || healthLoading;
+  const skeletonPulse = useSkeletonPulse();
 
   function handleRefresh() {
     refetchStats();
@@ -183,7 +185,9 @@ export default function DashboardScreen() {
         <View className="p-4 gap-3">
 
           {/* ── Real dashboard stats ── */}
-          {dash && (
+          {dashLoading && !dash ? (
+            <DashSkeleton pulse={skeletonPulse} />
+          ) : dash && (
             <>
               <SectionHeader title="Resumen general" />
               <View className="flex-row gap-3">
@@ -217,7 +221,9 @@ export default function DashboardScreen() {
           {/* ── Ticket status grid ──
                Los conteos usan totalElements de la misma lista filtrada por estado
                que muestra Tickets, para mantener ambas vistas sincronizadas.           */}
-          {ticketStats && (
+          {statsLoading && !ticketStats ? (
+            <TicketStatsSkeleton pulse={skeletonPulse} />
+          ) : ticketStats && (
             <>
               <SectionHeader
                 title="Estado de tickets"
@@ -273,7 +279,9 @@ export default function DashboardScreen() {
           )}
 
           {/* ── Health: branch status ── */}
-          {(healthList ?? []).length > 0 && (
+          {healthLoading && !(healthList ?? []).length ? (
+            <HealthSkeleton pulse={skeletonPulse} />
+          ) : (healthList ?? []).length > 0 && (
             <>
               <SectionHeader title="Estado de sucursales">
                 <View className="flex-row items-center gap-1.5">
@@ -568,6 +576,122 @@ function SheetRow({
       </View>
       <Ionicons name="chevron-forward" size={14} color={iconMuted} />
     </TouchableOpacity>
+  );
+}
+
+/* ─── Skeleton utilities ─── */
+
+function useSkeletonPulse(): Animated.Value {
+  const opacity = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.9, duration: 750, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.45, duration: 750, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+  return opacity;
+}
+
+function SkeletonBox({ pulse, style, rounded = 10 }: {
+  pulse: Animated.Value;
+  style?: object;
+  rounded?: number;
+}) {
+  return (
+    <Animated.View style={[{ backgroundColor: "#2A2A3C", borderRadius: rounded, opacity: pulse }, style]} />
+  );
+}
+
+function DashSkeleton({ pulse }: { pulse: Animated.Value }) {
+  return (
+    <>
+      <SkeletonBox pulse={pulse} style={{ height: 11, width: 120, marginBottom: 6, marginLeft: 4 }} />
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        {[0, 1, 2].map((i) => (
+          <View
+            key={i}
+            style={{
+              flex: 1, borderRadius: 16, padding: 12, alignItems: "center", gap: 7,
+              backgroundColor: "#14141E", borderWidth: 1, borderColor: "#2A2A3C",
+            }}
+          >
+            <SkeletonBox pulse={pulse} style={{ width: 22, height: 22, borderRadius: 11 }} />
+            <SkeletonBox pulse={pulse} style={{ width: 34, height: 20, borderRadius: 6 }} />
+            <SkeletonBox pulse={pulse} style={{ width: 48, height: 10, borderRadius: 5 }} />
+          </View>
+        ))}
+      </View>
+    </>
+  );
+}
+
+function TicketStatsSkeleton({ pulse }: { pulse: Animated.Value }) {
+  return (
+    <>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6, paddingHorizontal: 4 }}>
+        <SkeletonBox pulse={pulse} style={{ height: 11, width: 130 }} />
+        <SkeletonBox pulse={pulse} style={{ height: 11, width: 56, borderRadius: 5 }} />
+      </View>
+      {[0, 1].map((row) => (
+        <View key={row} style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+          {[0, 1].map((col) => (
+            <View
+              key={col}
+              style={{
+                flex: 1, borderRadius: 16, padding: 16, gap: 8,
+                backgroundColor: "#14141E", borderWidth: 1, borderColor: "#2A2A3C",
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <SkeletonBox pulse={pulse} style={{ width: 18, height: 18, borderRadius: 5 }} />
+                <SkeletonBox pulse={pulse} style={{ width: 11, height: 11, borderRadius: 4 }} />
+              </View>
+              <SkeletonBox pulse={pulse} style={{ width: 40, height: 32, borderRadius: 6 }} />
+              <SkeletonBox pulse={pulse} style={{ width: 68, height: 10, borderRadius: 5 }} />
+            </View>
+          ))}
+        </View>
+      ))}
+      <View
+        style={{
+          borderRadius: 16, padding: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+          backgroundColor: "#14141E", borderWidth: 1, borderColor: "#2A2A3C",
+        }}
+      >
+        <SkeletonBox pulse={pulse} style={{ width: 100, height: 14, borderRadius: 5 }} />
+        <SkeletonBox pulse={pulse} style={{ width: 44, height: 26, borderRadius: 8 }} />
+      </View>
+    </>
+  );
+}
+
+function HealthSkeleton({ pulse }: { pulse: Animated.Value }) {
+  return (
+    <>
+      <SkeletonBox pulse={pulse} style={{ height: 11, width: 150, marginBottom: 6, marginLeft: 4 }} />
+      <View style={{ backgroundColor: "#14141E", borderRadius: 16, borderWidth: 1, borderColor: "#2A2A3C", overflow: "hidden" }}>
+        {[0, 1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={{
+              flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12,
+              borderBottomWidth: i < 3 ? 1 : 0, borderBottomColor: "#2A2A3C",
+            }}
+          >
+            <SkeletonBox pulse={pulse} style={{ width: 32, height: 32, borderRadius: 10 }} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <SkeletonBox pulse={pulse} style={{ height: 13, width: "65%" }} />
+              <SkeletonBox pulse={pulse} style={{ height: 10, width: "42%" }} />
+            </View>
+            <SkeletonBox pulse={pulse} style={{ width: 58, height: 20, borderRadius: 10 }} />
+          </View>
+        ))}
+      </View>
+    </>
   );
 }
 
