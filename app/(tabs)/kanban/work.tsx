@@ -68,6 +68,10 @@ function dueFriendly(date?: string | null, columnKind?: string | null): {
   return { label: new Date(date + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" }), bg: "bg-dark-raised", text: "text-content-muted" };
 }
 
+function isPendingOverdue(item: WorkItem): boolean {
+  return item.overdue && item.columnKind !== "DONE" && item.columnKind !== "HISTORY";
+}
+
 /* ─── Markdown renderer (same as boardId.tsx) ─── */
 
 function renderInline(text: string) {
@@ -157,7 +161,9 @@ export default function KanbanWorkScreen() {
       );
     // Sort: overdue first, then by priority weight, then by due date
     return [...items].sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      const aOverdue = isPendingOverdue(a);
+      const bOverdue = isPendingOverdue(b);
+      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
       const pw = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
       const ap = a.card.priority ? (pw[a.card.priority as keyof typeof pw] ?? 0) : 0;
       const bp = b.card.priority ? (pw[b.card.priority as keyof typeof pw] ?? 0) : 0;
@@ -172,7 +178,7 @@ export default function KanbanWorkScreen() {
     todo:       rawItems.filter((i) => i.columnKind === "TODO").length,
     inProgress: rawItems.filter((i) => i.columnKind === "IN_PROGRESS").length,
     done:       rawItems.filter((i) => i.columnKind === "DONE").length,
-    overdue:    rawItems.filter((i) => i.overdue).length,
+    overdue:    rawItems.filter(isPendingOverdue).length,
   }), [rawItems]);
 
   // ── AI state ──
@@ -232,7 +238,7 @@ export default function KanbanWorkScreen() {
           <View className="flex-1">
             <Text className="text-content-primary text-lg font-bold">Todas las tareas</Text>
             <Text className="text-content-muted text-xs">
-              {filtered.length} tarjeta{filtered.length !== 1 ? "s" : ""} · {rawItems.filter(i => i.overdue).length > 0 ? `${rawItems.filter(i => i.overdue).length} vencidas` : "al día"}
+              {filtered.length} tarjeta{filtered.length !== 1 ? "s" : ""} · {metrics.overdue > 0 ? `${metrics.overdue} vencidas` : "al día"}
             </Text>
           </View>
         </View>
@@ -261,7 +267,14 @@ export default function KanbanWorkScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         className="bg-dark-surface border-b border-dark-border"
-        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{
+          minHeight: 52,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          gap: 8,
+          alignItems: "center",
+        }}
       >
         {[
           { label: "Total",     value: metrics.total,      color: "#A78BFA" },
@@ -270,9 +283,24 @@ export default function KanbanWorkScreen() {
           { label: "Listas",    value: metrics.done,       color: "#34D399" },
           ...(metrics.overdue > 0 ? [{ label: "Vencidas", value: metrics.overdue, color: "#EF4444" }] : []),
         ].map((m) => (
-          <View key={m.label} className="flex-row items-center gap-1.5 bg-dark-raised border border-dark-border rounded-xl px-3 py-1.5">
-            <Text style={{ color: m.color }} className="font-bold text-sm">{m.value}</Text>
-            <Text className="text-content-muted text-xs">{m.label}</Text>
+          <View
+            key={m.label}
+            className="flex-row items-center gap-1.5 bg-dark-raised border border-dark-border rounded-xl px-3"
+            style={{ minHeight: 34 }}
+          >
+            <Text
+              style={{ color: m.color, fontSize: 14, lineHeight: 18, fontWeight: "700" }}
+              numberOfLines={1}
+            >
+              {m.value}
+            </Text>
+            <Text
+              className="text-content-muted"
+              style={{ fontSize: 12, lineHeight: 18 }}
+              numberOfLines={1}
+            >
+              {m.label}
+            </Text>
           </View>
         ))}
       </ScrollView>
@@ -454,6 +482,13 @@ function WorkCard({
 }) {
   const { iconMuted } = useAppTheme();
   const due = dueFriendly(item.card.dueDate, item.columnKind);
+  const overdue = isPendingOverdue(item);
+  const columnLabel =
+    item.columnKind === "TODO" ? "Por hacer" :
+    item.columnKind === "IN_PROGRESS" ? "En curso" :
+    item.columnKind === "DONE" ? "Lista" :
+    item.columnKind === "HISTORY" ? "Historial" :
+    item.columnName;
 
   const kindDot =
     item.columnKind === "TODO"        ? "bg-amber-400" :
@@ -468,7 +503,7 @@ function WorkCard({
       onPress={onPress}
       activeOpacity={0.8}
       className={`bg-dark-surface rounded-2xl border p-3.5 ${
-        item.overdue ? "border-red-500/40" : "border-dark-border"
+        overdue ? "border-red-500/40" : "border-dark-border"
       }`}
     >
       {/* Row 1: priority dot + board badge + column dot + AI button */}
@@ -480,7 +515,7 @@ function WorkCard({
         </View>
         <View className="flex-row items-center gap-1 ml-auto">
           <View className={`w-1.5 h-1.5 rounded-full ${kindDot}`} />
-          <Text className="text-content-muted text-[10px]">{item.columnName}</Text>
+          <Text className="text-content-muted text-[10px]">{columnLabel}</Text>
         </View>
         <TouchableOpacity
           onPress={(e) => { e.stopPropagation?.(); onAi(); }}

@@ -8,7 +8,6 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  ActionSheetIOS,
   StatusBar,
   ScrollView,
   RefreshControl,
@@ -112,6 +111,7 @@ export default function TicketDetailScreen() {
   const [logNote, setLogNote] = useState("");
   const flatRef = useRef<FlatList>(null);
   const [quickReplyLoading, setQuickReplyLoading] = useState<QuickReplyType | null>(null);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
 
   const { data: ticket, isLoading: loadingTicket, refetch: refetchTicket, isRefetching: refetchingTicket } = useTicket(id);
   const { data: comments, isLoading: loadingComments, refetch: refetchComments, isRefetching: refetchingComments } = useTicketComments(id);
@@ -166,27 +166,7 @@ export default function TicketDetailScreen() {
 
   function handleChangeStatus() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const options = STATUS_OPTIONS.map((s) => STATUS_LABELS[s]);
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [...options, "Cancelar"],
-          cancelButtonIndex: options.length,
-          title: "Cambiar estado del ticket",
-        },
-        (idx) => {
-          if (idx < STATUS_OPTIONS.length) updateStatus.mutate(STATUS_OPTIONS[idx]);
-        }
-      );
-    } else {
-      Alert.alert("Cambiar estado", undefined, [
-        ...STATUS_OPTIONS.map((s) => ({
-          text: STATUS_LABELS[s],
-          onPress: () => updateStatus.mutate(s),
-        })),
-        { text: "Cancelar", style: "cancel" as const },
-      ]);
-    }
+    setShowStatusPicker(true);
   }
 
   function handlePickTemplate(t: ResponseTemplate) {
@@ -864,6 +844,15 @@ export default function TicketDetailScreen() {
           iconSecondary={iconSecondary}
         />
       </Modal>
+
+      {/* ── Status picker sheet ── */}
+      <StatusPickerSheet
+        visible={showStatusPicker}
+        currentStatus={ticket?.status ?? "OPEN"}
+        isPending={updateStatus.isPending}
+        onSelect={(s) => updateStatus.mutate(s)}
+        onClose={() => setShowStatusPicker(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1077,6 +1066,136 @@ function LogTimeSheet({
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+/* ─── Status Picker Sheet ─── */
+
+const STATUS_META: Record<TicketStatus, {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  description: string;
+}> = {
+  OPEN:        { icon: "mail-open-outline",        color: "#60A5FA", description: "Pendiente de atención" },
+  IN_PROGRESS: { icon: "play-circle-outline",      color: "#FBBF24", description: "Siendo atendido activamente" },
+  WAITING:     { icon: "pause-circle-outline",     color: "#FDE047", description: "Esperando respuesta del cliente" },
+  RESOLVED:    { icon: "checkmark-circle-outline", color: "#34D399", description: "Problema solucionado" },
+  CLOSED:      { icon: "lock-closed-outline",      color: "#9CA3AF", description: "Ticket finalizado y archivado" },
+};
+
+function StatusPickerSheet({
+  visible,
+  currentStatus,
+  isPending,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  currentStatus: TicketStatus;
+  isPending: boolean;
+  onSelect: (s: TicketStatus) => void;
+  onClose: () => void;
+}) {
+  const { iconSecondary } = useAppTheme();
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose} />
+      <View
+        style={{
+          backgroundColor: "#14141E",
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          borderTopWidth: 1,
+          borderColor: "#2A2A3C",
+        }}
+      >
+        {/* Handle */}
+        <View style={{ width: 40, height: 4, backgroundColor: "#2A2A3C", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4 }} />
+
+        {/* Header */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
+          <View>
+            <Text style={{ color: "#E5E7EB", fontWeight: "700", fontSize: 17 }}>Cambiar estado</Text>
+            <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 2 }}>
+              Actual: <Text style={{ color: STATUS_META[currentStatus].color, fontWeight: "600" }}>
+                {STATUS_LABELS[currentStatus]}
+              </Text>
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#2A2A3C", alignItems: "center", justifyContent: "center" }}
+          >
+            <Ionicons name="close" size={17} color={iconSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Status options */}
+        <View style={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10 }}>
+          {STATUS_OPTIONS.map((status) => {
+            const meta = STATUS_META[status];
+            const isCurrent = status === currentStatus;
+            return (
+              <TouchableOpacity
+                key={status}
+                onPress={() => {
+                  if (isCurrent || isPending) return;
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onSelect(status);
+                  onClose();
+                }}
+                activeOpacity={isCurrent ? 1 : 0.75}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 14,
+                  paddingVertical: 13,
+                  paddingHorizontal: 14,
+                  borderRadius: 18,
+                  borderWidth: 1.5,
+                  borderColor: isCurrent ? meta.color + "70" : "#2A2A3C",
+                  backgroundColor: isCurrent ? meta.color + "14" : "#1A1A28",
+                  opacity: isPending && !isCurrent ? 0.45 : 1,
+                }}
+              >
+                {/* Icon */}
+                <View style={{
+                  width: 44, height: 44, borderRadius: 14,
+                  backgroundColor: meta.color + "1F",
+                  borderWidth: 1, borderColor: meta.color + "45",
+                  alignItems: "center", justifyContent: "center",
+                }}>
+                  <Ionicons name={meta.icon} size={22} color={meta.color} />
+                </View>
+
+                {/* Text */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: isCurrent ? meta.color : "#E5E7EB", fontWeight: "700", fontSize: 15, lineHeight: 20 }}>
+                    {STATUS_LABELS[status]}
+                  </Text>
+                  <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 1 }}>
+                    {meta.description}
+                  </Text>
+                </View>
+
+                {/* Right: checkmark if current, pending spinner, or arrow */}
+                {isPending && !isCurrent ? (
+                  <ActivityIndicator size={18} color={iconSecondary} />
+                ) : isCurrent ? (
+                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: meta.color + "20", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="checkmark" size={14} color={meta.color} />
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={16} color="#4A4A5C" />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
