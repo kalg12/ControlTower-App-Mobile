@@ -260,96 +260,103 @@ export default function KanbanWorkScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Metrics row — tappable, aplican el filtro de kind */}
+        {!isLoading && rawItems.length > 0 && (
+          <View className="flex-row gap-2 mt-3">
+            {([
+              { label: "Total",     value: metrics.total,      color: "#A78BFA", kind: "ALL"         as KindFilter },
+              { label: "Por hacer", value: metrics.todo,       color: "#F59E0B", kind: "TODO"        as KindFilter },
+              { label: "En curso",  value: metrics.inProgress, color: "#60A5FA", kind: "IN_PROGRESS" as KindFilter },
+              { label: "Listas",    value: metrics.done,       color: "#34D399", kind: "DONE"        as KindFilter },
+            ] as const).map((m) => {
+              const active = kindFilter === m.kind;
+              return (
+                <TouchableOpacity
+                  key={m.label}
+                  onPress={() => { setKindFilter(m.kind); Haptics.selectionAsync(); }}
+                  activeOpacity={0.75}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: 8,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: active ? m.color + "55" : "#2A2A3C",
+                    backgroundColor: active ? m.color + "14" : "#1A1A28",
+                  }}
+                >
+                  <Text style={{ color: m.color, fontWeight: "700", fontSize: 17, lineHeight: 22 }}>
+                    {m.value}
+                  </Text>
+                  <Text style={{ color: "#6B7280", fontSize: 10, marginTop: 1 }} numberOfLines={1}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            {metrics.overdue > 0 && (
+              <TouchableOpacity
+                onPress={() => { setKindFilter("ALL"); Haptics.selectionAsync(); }}
+                activeOpacity={0.75}
+                style={{
+                  alignItems: "center",
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#EF444455",
+                  backgroundColor: "#EF444414",
+                }}
+              >
+                <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 17, lineHeight: 22 }}>
+                  {metrics.overdue}
+                </Text>
+                <Text style={{ color: "#EF4444", fontSize: 10, marginTop: 1 }} numberOfLines={1}>
+                  Vencidas
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
-      {/* Metrics strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="bg-dark-surface border-b border-dark-border"
-        style={{ flexGrow: 0 }}
-        contentContainerStyle={{
-          minHeight: 52,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        {[
-          { label: "Total",     value: metrics.total,      color: "#A78BFA" },
-          { label: "Por hacer", value: metrics.todo,       color: "#F59E0B" },
-          { label: "En curso",  value: metrics.inProgress, color: "#60A5FA" },
-          { label: "Listas",    value: metrics.done,       color: "#34D399" },
-          ...(metrics.overdue > 0 ? [{ label: "Vencidas", value: metrics.overdue, color: "#EF4444" }] : []),
-        ].map((m) => (
-          <View
-            key={m.label}
-            className="flex-row items-center gap-1.5 bg-dark-raised border border-dark-border rounded-xl px-3"
-            style={{ minHeight: 34 }}
-          >
-            <Text
-              style={{ color: m.color, fontSize: 14, lineHeight: 18, fontWeight: "700" }}
-              numberOfLines={1}
-            >
-              {m.value}
-            </Text>
-            <Text
-              className="text-content-muted"
-              style={{ fontSize: 12, lineHeight: 18 }}
-              numberOfLines={1}
-            >
-              {m.label}
-            </Text>
-          </View>
-        ))}
-      </ScrollView>
-
-      {/* Status filter chips */}
+      {/* Priority filter chips */}
       <View className="bg-dark-bg border-b border-dark-border/50">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
         >
-          {(["ALL", "TODO", "IN_PROGRESS", "DONE"] as KindFilter[]).map((k) => (
-            <TouchableOpacity
-              key={k}
-              onPress={() => { setKindFilter(k); Haptics.selectionAsync(); }}
-              className={`px-3 py-1.5 rounded-full border ${
-                kindFilter === k
-                  ? "bg-brand border-brand/60"
-                  : "bg-dark-raised border-dark-border"
-              }`}
-            >
-              <Text className={`text-xs font-semibold ${kindFilter === k ? "text-white" : "text-content-muted"}`}>
-                {KIND_LABEL[k]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-          <View className="w-px bg-dark-border mx-1" />
-          {(["HIGH", "CRITICAL", "MEDIUM", "LOW"] as PriorityFilter[]).map((p) => (
+          <TouchableOpacity
+            onPress={() => { setPriorityFilter("ALL"); Haptics.selectionAsync(); }}
+            className={`px-3 py-1.5 rounded-full border ${
+              priorityFilter === "ALL"
+                ? "bg-brand border-brand/60"
+                : "bg-dark-raised border-dark-border"
+            }`}
+          >
+            <Text className={`text-xs font-semibold ${priorityFilter === "ALL" ? "text-white" : "text-content-muted"}`}>
+              Todas
+            </Text>
+          </TouchableOpacity>
+          {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as PriorityFilter[]).map((p) => (
             <TouchableOpacity
               key={p}
               onPress={() => { setPriorityFilter(priorityFilter === p ? "ALL" : p); Haptics.selectionAsync(); }}
-              className={`px-3 py-1.5 rounded-full border flex-row items-center gap-1 ${
+              className="px-3 py-1.5 rounded-full border flex-row items-center gap-1.5"
+              style={
                 priorityFilter === p
-                  ? "border-current"
-                  : "bg-dark-raised border-dark-border"
-              }`}
-              style={priorityFilter === p ? { backgroundColor: `${PRIORITY_COLOR[p]}20`, borderColor: `${PRIORITY_COLOR[p]}60` } : {}}
+                  ? { backgroundColor: `${PRIORITY_COLOR[p]}20`, borderColor: `${PRIORITY_COLOR[p]}60` }
+                  : { backgroundColor: "#1A1A28", borderColor: "#2A2A3C" }
+              }
             >
-              <View
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ backgroundColor: PRIORITY_COLOR[p] }}
-              />
+              <View className="w-2 h-2 rounded-full" style={{ backgroundColor: PRIORITY_COLOR[p] }} />
               <Text
                 className="text-xs font-semibold"
-                style={{ color: priorityFilter === p ? PRIORITY_COLOR[p] : undefined }}
+                style={{ color: priorityFilter === p ? PRIORITY_COLOR[p] : "#6B7280" }}
               >
-                <Text className={priorityFilter === p ? "" : "text-content-muted"}>
-                  {PRIORITY_LABEL[p]}
-                </Text>
+                {PRIORITY_LABEL[p]}
               </Text>
             </TouchableOpacity>
           ))}
