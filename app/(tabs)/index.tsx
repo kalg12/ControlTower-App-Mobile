@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Platform,
   Animated,
+  StyleSheet,
 } from "react-native";
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -94,9 +95,9 @@ export default function DashboardScreen() {
   const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
   const { barStyle, statusBarBg, iconSecondary, iconMuted } = useAppTheme();
-  const { data: ticketStats, isLoading: statsLoading, refetch: refetchStats } = useTicketStats();
+  const { data: ticketStats, isLoading: statsLoading, isFetching: statsFetching, refetch: refetchStats } = useTicketStats();
 
-  const { data: dash, isLoading: dashLoading, refetch: refetchDash } = useQuery({
+  const { data: dash, isLoading: dashLoading, isFetching: dashFetching, refetch: refetchDash } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async (): Promise<DashboardStats> => {
       const res = await apiClient.get("/api/v1/dashboard");
@@ -108,7 +109,7 @@ export default function DashboardScreen() {
     retry: false,
   });
 
-  const { data: healthList, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
+  const { data: healthList, isLoading: healthLoading, isFetching: healthFetching, refetch: refetchHealth } = useQuery({
     queryKey: ["health", "clients"],
     queryFn: async (): Promise<BranchHealthSummary[]> => {
       const res = await apiClient.get("/api/v1/health/clients");
@@ -120,7 +121,28 @@ export default function DashboardScreen() {
   });
 
   const isLoading = statsLoading || dashLoading || healthLoading;
+  const isRefreshing = (statsFetching || dashFetching || healthFetching) && !isLoading;
   const skeletonPulse = useSkeletonPulse();
+
+  // Full-screen loader: visible only for the initial load (no cached data yet).
+  // useState lazily initialises to false when data is already in cache (tab revisit).
+  const [loaderVisible, setLoaderVisible] = useState(() => !dash && !ticketStats);
+  const loaderOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!isLoading && loaderVisible) {
+      Animated.timing(loaderOpacity, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setLoaderVisible(false);
+      });
+    }
+  }, [isLoading]);
+
+  const hasAnyData = !!dash || !!ticketStats;
+  const showError = !loaderVisible && !hasAnyData;
 
   function handleRefresh() {
     refetchStats();
@@ -140,10 +162,13 @@ export default function DashboardScreen() {
 
   return (
     <>
+      {showError ? (
+        <DashboardErrorScreen onRetry={handleRefresh} isRetrying={isRefreshing} />
+      ) : (
       <ScrollView
         className="flex-1 bg-dark-bg"
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor="#7C3AED" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#7C3AED" />
         }
       >
         <StatusBar barStyle={barStyle} backgroundColor={statusBarBg} />
@@ -324,6 +349,15 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
+      )}
+
+      {loaderVisible && (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { opacity: loaderOpacity, zIndex: 100 }]}
+        >
+          <DashboardLoader />
+        </Animated.View>
+      )}
 
       {/* ── Profile sheet ── */}
       <ProfileSheet
@@ -764,6 +798,93 @@ function QuickAction({ icon, label, color, onPress }: {
       </View>
       <Text className="text-content-muted text-[10px] text-center leading-3">{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+/* ─── Initial load overlay ─── */
+
+function DashboardLoader() {
+  const { isDark } = useAppTheme();
+  const bg = isDark ? "#0C0C14" : "#F2F2F8";
+  const textColor = isDark ? "#8888A0" : "#52527A";
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.07, duration: 900, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: bg, alignItems: "center", justifyContent: "center" }]}>
+      <Animated.View style={[{
+        width: 80, height: 80, borderRadius: 24,
+        backgroundColor: "#7C3AED",
+        alignItems: "center", justifyContent: "center",
+        marginBottom: 28,
+        shadowColor: "#7C3AED",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.45, shadowRadius: 24,
+        elevation: 12,
+      }, { transform: [{ scale }] }]}>
+        <Text style={{ color: "#fff", fontSize: 26, fontWeight: "800", letterSpacing: 1 }}>CT</Text>
+      </Animated.View>
+      <ActivityIndicator size="large" color="#7C3AED" style={{ marginBottom: 16 }} />
+      <Text style={{ color: textColor, fontSize: 14, fontWeight: "500", letterSpacing: 0.3 }}>
+        Cargando dashboard...
+      </Text>
+    </View>
+  );
+}
+
+function DashboardErrorScreen({ onRetry, isRetrying }: { onRetry: () => void; isRetrying: boolean }) {
+  const { isDark } = useAppTheme();
+  const bg = isDark ? "#0C0C14" : "#F2F2F8";
+  const textPrimary = isDark ? "#FFFFFF" : "#14141E";
+  const textSub = isDark ? "#8888A0" : "#52527A";
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bg, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 }}>
+      <View style={{
+        width: 72, height: 72, borderRadius: 22,
+        backgroundColor: "#EF444415", borderWidth: 1, borderColor: "#EF444430",
+        alignItems: "center", justifyContent: "center", marginBottom: 20,
+      }}>
+        <Ionicons name="cloud-offline-outline" size={32} color="#EF4444" />
+      </View>
+      <Text style={{ color: textPrimary, fontSize: 18, fontWeight: "700", marginBottom: 8, textAlign: "center" }}>
+        Sin conexión
+      </Text>
+      <Text style={{ color: textSub, fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 28 }}>
+        No se pudieron cargar los datos del dashboard.{"\n"}Verifica tu conexión e intenta de nuevo.
+      </Text>
+      <TouchableOpacity
+        onPress={onRetry}
+        disabled={isRetrying}
+        style={{
+          backgroundColor: "#7C3AED",
+          paddingHorizontal: 32, paddingVertical: 13,
+          borderRadius: 14,
+          flexDirection: "row", alignItems: "center", gap: 8,
+          opacity: isRetrying ? 0.7 : 1,
+        }}
+        activeOpacity={0.8}
+      >
+        {isRetrying ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="refresh-outline" size={16} color="#fff" />
+        )}
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+          {isRetrying ? "Cargando..." : "Reintentar"}
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
