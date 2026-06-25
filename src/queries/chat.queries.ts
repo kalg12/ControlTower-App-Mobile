@@ -31,6 +31,8 @@ export function useConversations(status?: ConversationStatus) {
     initialPageParam: 0,
     getNextPageParam: (last, _, lastPageParam) =>
       last.last ? undefined : (lastPageParam as number) + 1,
+    staleTime: 10_000,
+    refetchInterval: 15_000,   // poll every 15 s — new conversations appear without pull-to-refresh
   });
 }
 
@@ -49,6 +51,8 @@ export function useMessages(conversationId: string) {
     initialPageParam: 0,
     getNextPageParam: (last, _, lastPageParam) =>
       last.last ? undefined : (lastPageParam as number) + 1,
+    staleTime: 3_000,
+    refetchInterval: 6_000,    // poll every 6 s — visitor messages appear without manual refresh
   });
 }
 

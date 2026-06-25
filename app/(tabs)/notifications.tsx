@@ -9,6 +9,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "@/api/client";
+import { getCard } from "@/api/kanban.api";
 import { router } from "expo-router";
 import { timeAgo } from "@/utils/timeAgo";
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -42,6 +43,7 @@ const TYPE_ICON: Record<string, IconConfig> = {
   CSAT_LOW_SCORE:            { name: "thumbs-down-outline",      color: "#EF4444" },
   POS_TICKET:                { name: "storefront-outline",       color: "#F97316" },
   POS_CHAT:                  { name: "chatbubble-outline",       color: "#3B82F6" },
+  CHAT_CONVERSATION_STARTED: { name: "chatbubble-ellipses-outline", color: "#3B82F6" },
   // Kanban
   CARD_DUE_SOON:             { name: "albums-outline",           color: "#FBBF24" },
   CARD_OVERDUE:              { name: "albums-outline",           color: "#EF4444" },
@@ -72,17 +74,80 @@ const TYPE_ICON: Record<string, IconConfig> = {
   CLIENT_REMINDER_SNOOZED:   { name: "pause-circle-outline",     color: "#8888A0" },
 };
 
-/* ─── Navigation helper ─── */
+/* ─── Navigation helpers ─── */
 
-function navigateFromNotification(item: NotificationItem) {
-  const meta = item.metadata ?? {};
-  if (meta.ticketId) {
-    router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: meta.ticketId } });
+function navToTicket(ticketId: string) {
+  router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: ticketId } });
+}
+
+function navToCard(boardId: string, cardId: string) {
+  router.push({
+    pathname: "/(tabs)/kanban/[boardId]",
+    params: { boardId, initialCardId: cardId },
+  });
+}
+
+async function resolveBoardId(cardId: string): Promise<string | null> {
+  try {
+    const card = await getCard(cardId);
+    return card.boardId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function navigateFromNotification(item: NotificationItem) {
+  const meta = (item.metadata as Record<string, string>) ?? {};
+
+  // ESTIMATE_EXCEEDED — entityType distinguishes ticket vs card
+  if (item.type === "ESTIMATE_EXCEEDED") {
+    if (meta.entityType === "TICKET" && meta.entityId) {
+      navToTicket(meta.entityId);
+    } else if (meta.entityType === "CARD" && meta.entityId) {
+      const boardId = meta.boardId ?? (await resolveBoardId(meta.entityId));
+      if (boardId) navToCard(boardId, meta.entityId);
+      else router.push("/(tabs)/kanban");
+    }
     return;
   }
-  if (meta.cardId) {
-    router.push("/(tabs)/kanban");
+
+  // Live chat: navigate directly to the conversation
+  if (item.type === "CHAT_CONVERSATION_STARTED" && meta.conversationId) {
+    router.push({ pathname: "/(tabs)/chat/[id]", params: { id: meta.conversationId } });
+    return;
   }
+
+  // Any notification that carries a ticketId:
+  // TICKET_ASSIGNED, TICKET_ESCALATED, TICKET_STATUS_CHANGED, TICKET_SLA_BREACHED,
+  // TICKET_NEW_COMMENT, TICKET_CLOSED, TICKET_CREATED, TICKET_RESTORED,
+  // SLA_WARNING, TICKET_AUTO_ASSIGNED, TICKET_BULK_ASSIGN, TICKET_BULK_STATUS,
+  // POS_TICKET, POS_CHAT, CSAT_RESPONSE_RECEIVED, CSAT_LOW_SCORE
+  if (meta.ticketId) {
+    navToTicket(meta.ticketId);
+    return;
+  }
+
+  // Kanban card types: CARD_DUE_SOON, CARD_OVERDUE
+  if (meta.cardId) {
+    const boardId = meta.boardId ?? (await resolveBoardId(meta.cardId));
+    if (boardId) {
+      navToCard(boardId, meta.cardId);
+    } else {
+      // boardId unavailable (notification created before backend fix) — go to kanban tab
+      router.push("/(tabs)/kanban");
+    }
+    return;
+  }
+
+  // Health incidents — no dedicated screen, go to dashboard for context
+  if (item.type === "HEALTH_INCIDENT" || item.type === "HEALTH_INCIDENT_RESOLVED") {
+    router.push("/(tabs)");
+    return;
+  }
+
+  // INVOICE_*, CLIENT_MOVED, OPPORTUNITY_*, PROSPECT_*, CONTACT_ASSIGNED,
+  // CALENDAR_*, CLIENT_REMINDER_*, LICENSE_*, WEBHOOK_FAILED, BRANCH_MOVED —
+  // no corresponding screen in the mobile app yet; just mark as read.
 }
 
 /* ─── Screen ─── */
@@ -138,7 +203,7 @@ export default function NotificationsScreen() {
 
   function handleTap(item: NotificationItem) {
     if (!item.read) markRead.mutate(item.id);
-    navigateFromNotification(item);
+    navigateFromNotification(item).catch(() => {});
   }
 
   const unreadCount = (data ?? []).filter((n) => !n.read).length;

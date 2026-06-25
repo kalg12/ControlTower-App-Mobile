@@ -31,6 +31,7 @@ export default function ChatDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [message, setMessage] = useState("");
   const flatRef = useRef<FlatList>(null);
+  const nearBottomRef = useRef(true);
 
   const { data: conversation, isLoading: loadingConv } = useConversation(id);
   const { data: messagesData, isLoading: loadingMsgs, fetchNextPage, hasNextPage } = useMessages(id);
@@ -184,7 +185,14 @@ export default function ChatDetailScreen() {
         renderItem={({ item }) => <ChatBubble message={item} />}
         onEndReached={() => hasNextPage && fetchNextPage()}
         onEndReachedThreshold={0.1}
-        onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
+        onScroll={({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
+          nearBottomRef.current =
+            layoutMeasurement.height + contentOffset.y >= contentSize.height - 120;
+        }}
+        scrollEventThrottle={200}
+        onContentSizeChange={() => {
+          if (nearBottomRef.current) flatRef.current?.scrollToEnd({ animated: true });
+        }}
         ListEmptyComponent={
           <View className="items-center py-16">
             <Ionicons name="chatbubble-outline" size={40} color={iconEmpty} />

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, AppState, AppStateStatus } from "react-native";
 import { Stack, router, useSegments } from "expo-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAuthStore } from "@/stores/auth.store";
 import { useThemeStore } from "@/stores/theme.store";
@@ -57,6 +57,13 @@ export default function RootLayout() {
   useEffect(() => {
     hydrate();
     hydrateTheme();
+
+    // Tell React Query to refetch stale data whenever the app comes back to the foreground.
+    // Without this, React Native never triggers the web-style window focus event.
+    const sub = AppState.addEventListener("change", (status: AppStateStatus) => {
+      focusManager.setFocused(status === "active");
+    });
+    return () => sub.remove();
   }, []);
 
   if (!hydrated) {

@@ -3,6 +3,7 @@ import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { router } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { registerPushToken } from "@/api/tickets.api";
 
 // Expo Go removed remote push in SDK 53. Detect it via appOwnership OR executionEnvironment.
@@ -11,6 +12,7 @@ const isExpoGo =
   Constants.executionEnvironment === "storeClient";
 
 export function usePushNotifications() {
+  const queryClient = useQueryClient();
   const notifListenerRef = useRef<{ remove: () => void } | null>(null);
   const responseListenerRef = useRef<{ remove: () => void } | null>(null);
 
@@ -35,12 +37,27 @@ export function usePushNotifications() {
 
       registerForPushNotifications(Notifications);
 
-      notifListenerRef.current = Notifications.addNotificationReceivedListener(() => {});
+      // Foreground notification received — refresh all critical data immediately
+      notifListenerRef.current = Notifications.addNotificationReceivedListener(() => {
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["tickets"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        queryClient.invalidateQueries({ queryKey: ["chat"] });
+      });
 
+      // Notification tapped (background/killed) — refresh data and navigate
       responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(
         (response) => {
-          const data = response.notification.request.content.data as { ticketId?: string };
-          if (data?.ticketId) {
+          queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["tickets"] });
+          queryClient.invalidateQueries({ queryKey: ["chat"] });
+          const data = response.notification.request.content.data as {
+            ticketId?: string;
+            conversationId?: string;
+          };
+          if (data?.conversationId) {
+            router.push({ pathname: "/(tabs)/chat/[id]", params: { id: data.conversationId } });
+          } else if (data?.ticketId) {
             router.push({ pathname: "/(tabs)/tickets/[id]", params: { id: data.ticketId } });
           }
         }

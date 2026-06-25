@@ -72,6 +72,13 @@ apiClient.interceptors.response.use(
       // Redirigimos al login. router.replace() (no push) evita que el usuario
       // pueda volver atrás con el botón Back a una pantalla que requiere auth.
       router.replace("/(auth)/login");
+
+      // No propagamos el error: el componente que disparó la petición ya fue
+      // desmontado por la redirección, y Promise.reject() sin catch activo
+      // produce "Uncaught (in promise)" en la consola de Android/Hermes.
+      // Devolvemos una promesa que nunca resuelve: la petición original queda
+      // silenciada sin afectar ningún otro flujo.
+      return new Promise(() => {});
     }
     return Promise.reject(error);
   }

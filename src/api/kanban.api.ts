@@ -67,6 +67,11 @@ export async function moveCard(cardId: string, payload: MoveCardPayload): Promis
   return res.data;
 }
 
+export async function getCard(cardId: string): Promise<{ id: string; boardId: string }> {
+  const res = await apiClient.get(`/api/v1/boards/cards/${cardId}`);
+  return res.data;
+}
+
 export async function deleteCard(cardId: string): Promise<void> {
   await apiClient.delete(`/api/v1/boards/cards/${cardId}`);
 }

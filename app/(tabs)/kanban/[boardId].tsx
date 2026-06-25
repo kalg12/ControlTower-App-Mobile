@@ -17,7 +17,7 @@ import {
   PanResponder,
   Animated,
 } from "react-native";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import * as Clipboard from "expo-clipboard";
 import { useMutation } from "@tanstack/react-query";
 import { aiAssist } from "@/api/ai.api";
@@ -499,7 +499,7 @@ function ClientSelector({
 /* ─── Screen ─── */
 
 export default function BoardDetailScreen() {
-  const { boardId } = useLocalSearchParams<{ boardId: string }>();
+  const { boardId, initialCardId } = useLocalSearchParams<{ boardId: string; initialCardId?: string }>();
   const { barStyle, statusBarBg, iconSecondary, iconMuted } = useAppTheme();
 
   const [showAddColumn, setShowAddColumn] = useState(false);
@@ -508,6 +508,21 @@ export default function BoardDetailScreen() {
   const [viewCard, setViewCard] = useState<KanbanCard | null>(null);
 
   const { data: board, isLoading, isRefetching, refetch } = useBoard(boardId);
+
+  // Deep-link from notification: auto-open the target card once the board loads.
+  // Track the last processed cardId so different card IDs each trigger the modal,
+  // but the same ID is not processed twice (prevents double-open on re-renders).
+  // Guard against Android serializing absent optional params as the string "undefined".
+  const lastDeepLinkedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialCardId || initialCardId === "undefined" || !board) return;
+    if (lastDeepLinkedId.current === initialCardId) return;
+    lastDeepLinkedId.current = initialCardId;
+    for (const col of board.columns) {
+      const card = col.cards.find((c) => c.id === initialCardId);
+      if (card) { setViewCard(card); break; }
+    }
+  }, [board, initialCardId]);
   const { data: users = [] } = useTenantUsers();
   const { data: clients = [] } = useClients();
 
